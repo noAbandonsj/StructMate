@@ -1,0 +1,26 @@
+{
+  "sqlite_version": "3.53.1",
+  "tables": 26,
+  "checks_passed": 18,
+  "checks": [
+    "private knowledge base requires owner",
+    "duplicate live document",
+    "only one active document version",
+    "unfinished version cannot be active",
+    "unknown knowledge point",
+    "one live generation per conversation",
+    "reply must reference the same conversation",
+    "invalid JSON payload",
+    "verified question needs validator",
+    "practice item must share session owner",
+    "attempt must share item owner",
+    "one attempt per presented item",
+    "request id unique per user",
+    "weighted statistics derive from actual attempts",
+    "voided attempt excluded from statistics",
+    "revoked question excluded from statistics",
+    "one active job per target",
+    "foreign keys and integrity checks pass"
+  ],
+  "scope": "in-memory schema validation only"
+}

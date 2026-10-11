@@ -1,0 +1,84 @@
+# 知序 · 数据结构课程学习助手
+
+基于 RAG 的桌面网页项目，后端使用 Python / FastAPI，前端使用 Vue 3、TypeScript 和 Vite。
+业务数据保存到 SQLite，文档向量使用 Qdrant 本地持久化模式。
+
+目前完成基础工程初始化：网页导航、服务连接状态、后端健康接口、本地存储连接、迁移框架、开发脚本与依赖锁文件。
+账户、文档处理、真实答疑、题目、错题和报告尚未实现；页面明确显示准备状态。
+
+## 环境
+
+- Python 3.13（本次验证版本 3.13.7；工程声明兼容 3.12–3.13）。
+- Node.js 22.12+（本次验证版本 24.11.1）。
+- uv 与 pnpm 10（本次使用 pnpm 10.33.0）。
+- 首版使用一个后端进程，共享一个 Qdrant 本地客户端。
+
+## 安装与启动
+
+在仓库根目录的 PowerShell 中执行：
+
+```powershell
+if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
+
+Push-Location backend
+uv sync --locked
+uv run --locked alembic upgrade head
+Pop-Location
+
+Push-Location frontend
+pnpm.cmd install --frozen-lockfile
+Pop-Location
+```
+
+已有 .env 时保留原文件并按 [.env.example](.env.example) 补充配置。本轮初始化已在本机安装依赖，无须配置模型密钥。
+目前迁移目录尚无业务迁移，upgrade head 验证框架可用，不会创建规划中的 16 张业务表。
+
+分别在两个终端中运行：
+
+```powershell
+# 终端 1：后端
+.\scripts\start-backend.ps1
+
+# 终端 2：网页
+.\scripts\start-frontend.ps1
+```
+
+网页地址：`http://127.0.0.1:5173`；接口文档：`http://127.0.0.1:8000/docs`；
+健康接口：`http://127.0.0.1:8000/api/v1/health`。网页 /api 通过 Vite 代理到后端。
+
+后端开发可使用 `.\scripts\start-backend.ps1 -Reload`。终端中按 Ctrl+C 停止各自服务。
+若 PowerShell 执行策略阻止本地脚本，可在当前调用使用
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-backend.ps1`，其他脚本同理。
+
+## 检查
+
+```powershell
+.\scripts\check.ps1
+```
+
+包含后端 Ruff 检查与格式检查、基础集成测试、迁移差异检查，以及网页 TypeScript 检查与生产构建。
+测试使用临时数据目录，验证 SQLite 配置、Qdrant 重启持久化和锁释放、存储故障的健康状态。
+本阶段不运行浏览器自动检查，也不开发手机端适配。
+
+## 目录
+
+```text
+backend/
+  src/capstone/     FastAPI、配置、路由和数据库基础
+  migrations/      Alembic 框架及后续业务迁移
+  tests/           基础集成测试
+frontend/
+  src/             桌面导航、页面入口和 API 调用
+scripts/           Windows 启动与检查入口
+data/              本地 SQLite、原始资料和向量；实际数据不提交
+docs/              项目规划、设计、自检和开发说明
+```
+
+设计依据：[项目规划](docs/项目规划.md)、[设计索引](docs/design/README.md)、
+[开发指南](docs/开发指南.md)。首版建议 16 个业务实体；旧 docs/design/schema.sql 是历史草案，不作为当前初始化脚本执行。
+练习采用可切换的题库 / 实时 AI 出题方式，AI 出题不限定算法模板或程序验算能力。
+
+实现结构参考 [FastAPI 模块组织](https://fastapi.tiangolo.com/tutorial/bigger-applications/)、
+[Vite 开始指南](https://vite.dev/guide/)、
+[Qdrant 本地模式](https://github.com/qdrant/qdrant-client#local-mode) 和
+[Alembic 迁移指南](https://alembic.sqlalchemy.org/en/latest/tutorial.html)。

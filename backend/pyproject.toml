@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "capstone-api"
+version = "0.1.0"
+description = "Desktop RAG learning assistant for data structures"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "alembic>=1.15,<2",
+  "fastapi>=0.115,<1",
+  "pydantic-settings>=2.7,<3",
+  "qdrant-client>=1.15,<2",
+  "sqlalchemy>=2.0,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[dependency-groups]
+dev = [
+  "httpx2>=2.0,<3",
+  "pytest>=8.3,<10",
+  "ruff>=0.11,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/capstone"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

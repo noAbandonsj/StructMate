@@ -1,0 +1,17 @@
+{
+  "checks_passed": 11,
+  "checks": [
+    "citation panel toggles",
+    "teaching mode changes",
+    "conversation summary appears",
+    "incorrect attempt enters wrong-question flow and cannot submit twice",
+    "review preserves initial wrong attempt",
+    "report separates first-attempt accuracy from review",
+    "mock ingestion reaches ready state",
+    "chat input updates example question",
+    "all six pages fit 1024px content width",
+    "all six pages fit 320px content width",
+    "no JavaScript runtime errors"
+  ],
+  "scope": "local wireframe simulation; no API or model calls"
+}
