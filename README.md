@@ -4,7 +4,8 @@
 业务数据保存到 SQLite，文档向量使用 Qdrant 本地持久化模式。
 
 目前完成基础工程初始化：网页导航、服务连接状态、后端健康接口、本地存储连接、迁移框架、开发脚本与依赖锁文件。
-账户、文档处理、真实答疑、题目、错题和报告尚未实现；页面明确显示准备状态。
+账户与知识库的数据基础也已完成：四张业务表、首个迁移和课程目录初始化。
+注册登录接口、账户页面、文档处理、真实答疑、题目、错题和报告尚未实现；页面明确显示准备状态。
 
 ## 环境
 
@@ -23,6 +24,7 @@ if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
 Push-Location backend
 uv sync --locked
 uv run --locked alembic upgrade head
+uv run --locked python -X utf8 -m capstone.seed
 Pop-Location
 
 Push-Location frontend
@@ -31,7 +33,9 @@ Pop-Location
 ```
 
 已有 .env 时保留原文件并按 [.env.example](.env.example) 补充配置。本轮初始化已在本机安装依赖，无须配置模型密钥。
-目前迁移目录尚无业务迁移，upgrade head 验证框架可用，不会创建规划中的 16 张业务表。
+当前迁移 0001 创建用户、会话、知识库和知识点四张业务表，其余表随功能加入。
+课程初始化可重复执行，写入一个课程库和 31 个目录节点（8 个章节、23 个子知识点），保留已有 ID 和个人数据；不创建演示账号或课程文档。
+它不会自动执行迁移，数据库未升级时会提示先执行 upgrade head。-X utf8 保证初始化命令输出中文时使用 UTF-8。
 
 分别在两个终端中运行：
 
@@ -58,6 +62,7 @@ Pop-Location
 
 包含后端 Ruff 检查与格式检查、基础集成测试、迁移差异检查，以及网页 TypeScript 检查与生产构建。
 测试使用临时数据目录，验证 SQLite 配置、Qdrant 重启持久化和锁释放、存储故障的健康状态。
+同时验证四表迁移、关键约束、事务回滚、UTC 时间和课程初始化；测试不会降级或清空实际运行数据库。
 本阶段不运行浏览器自动检查，也不开发手机端适配。
 
 ## 目录
@@ -66,7 +71,7 @@ Pop-Location
 backend/
   src/capstone/     FastAPI、配置、路由和数据库基础
   migrations/      Alembic 框架及后续业务迁移
-  tests/           基础集成测试
+  tests/           存储、迁移、业务约束与课程初始化测试
 frontend/
   src/             桌面导航、页面入口和 API 调用
 scripts/           Windows 启动与检查入口
@@ -75,7 +80,7 @@ docs/              项目规划、设计、自检和开发说明
 ```
 
 设计依据：[项目规划](docs/项目规划.md)、[设计索引](docs/design/README.md)、
-[开发指南](docs/开发指南.md)。首版建议 16 个业务实体；旧 docs/design/schema.sql 是历史草案，不作为当前初始化脚本执行。
+[开发指南](docs/开发指南.md)、[下一阶段实施规划](docs/下一阶段实施规划.md)。四张基础业务表已完成，接下来实现账户接口；首版整体建议 16 个业务实体。旧 docs/design/schema.sql 是历史草案，不作为当前初始化脚本执行。
 练习采用可切换的题库 / 实时 AI 出题方式，AI 出题不限定算法模板或程序验算能力。
 
 实现结构参考 [FastAPI 模块组织](https://fastapi.tiangolo.com/tutorial/bigger-applications/)、

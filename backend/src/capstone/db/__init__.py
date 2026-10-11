@@ -1,1 +1,1 @@
-"""Database foundation; business models will be added with their migrations."""
+"""Database models and connection helpers."""
