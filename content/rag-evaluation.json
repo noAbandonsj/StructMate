@@ -1,0 +1,463 @@
+[
+  {
+    "id": "rag-01",
+    "question": "线性表的逻辑次序是否等于内存连续？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "线性序列"
+      }
+    ],
+    "answer_rubric": [
+      "逻辑",
+      "链表"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-02",
+    "question": "已知有效下标访问顺序表为什么是 O(1)？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "顺序表"
+      }
+    ],
+    "answer_rubric": [
+      "下标",
+      "O(1)"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-03",
+    "question": "容量足够时在下标 i 插入元素要移动多少个？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "顺序表"
+      }
+    ],
+    "answer_rubric": [
+      "n-i"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-04",
+    "question": "删除下标 i 后要移动多少个后续元素？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "顺序表"
+      }
+    ],
+    "answer_rubric": [
+      "n-i-1"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-05",
+    "question": "非循环单链表节点保存什么？末节点 next 是什么？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "单链表"
+      }
+    ],
+    "answer_rubric": [
+      "数据",
+      "next",
+      "空"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-06",
+    "question": "为什么从表头查找第 i 个节点不能保证 O(1)？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "单链表"
+      }
+    ],
+    "answer_rubric": [
+      "逐节点",
+      "O(n)"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-07",
+    "question": "已知 p 和 s，在 p 后插入 s 的链接调整顺序是什么？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "单链表"
+      }
+    ],
+    "answer_rubric": [
+      "s.next",
+      "p.next"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-08",
+    "question": "对 [10,20,30,40] 在下标 1 插入 15，给出结果和移动数。",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "linear-list",
+        "heading": "例子"
+      }
+    ],
+    "answer_rubric": [
+      "10,15,20,30,40",
+      "3"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-09",
+    "question": "栈的 LIFO 含义是什么？push 与 pop 操作哪里？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "栈"
+      }
+    ],
+    "answer_rubric": [
+      "后进先出",
+      "栈顶"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-10",
+    "question": "普通 FIFO 队列在哪一端入队和出队？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "普通队列"
+      }
+    ],
+    "answer_rubric": [
+      "队尾",
+      "队头"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-11",
+    "question": "对空栈直接 pop 应怎样处理？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "栈"
+      }
+    ],
+    "answer_rubric": [
+      "空栈",
+      "不能"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-12",
+    "question": "push(1)、push(2)、pop、push(3)、pop 的弹出值和最终栈是什么？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "栈"
+      }
+    ],
+    "answer_rubric": [
+      "2",
+      "3",
+      "1"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-13",
+    "question": "带 head 和 tail 的单链表如何实现 FIFO 入队和出队？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "普通队列"
+      }
+    ],
+    "answer_rubric": [
+      "尾部",
+      "头部"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-14",
+    "question": "在保留一个空位的循环队列中，怎样判断空与满？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "循环队列教学约定"
+      }
+    ],
+    "answer_rubric": [
+      "front",
+      "rear",
+      "%"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-15",
+    "question": "保留一个空位时，容量 N 的数组最多放多少个元素？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "循环队列教学约定"
+      }
+    ],
+    "answer_rubric": [
+      "N-1"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-16",
+    "question": "N=8、front=6、rear=2 时当前长度与有效位置是什么？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "stack-queue",
+        "heading": "例子"
+      }
+    ],
+    "answer_rubric": [
+      "4",
+      "6",
+      "7",
+      "0",
+      "1"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-17",
+    "question": "有根有序二叉树最多有几个孩子？左右孩子可以混同吗？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "结构"
+      }
+    ],
+    "answer_rubric": [
+      "两个",
+      "区别"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-18",
+    "question": "本笔记怎样约定空树、叶子的高度和根的深度？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "结构"
+      }
+    ],
+    "answer_rubric": [
+      "-1",
+      "0",
+      "边"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-19",
+    "question": "项目例子 A(B(D,E),C) 有多少节点、叶子和高度？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "项目例子"
+      }
+    ],
+    "answer_rubric": [
+      "5",
+      "3",
+      "2"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-20",
+    "question": "先序、中序、后序各怎样安排根和左右子树？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "三种深度优先遍历"
+      }
+    ],
+    "answer_rubric": [
+      "根",
+      "左",
+      "右"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-21",
+    "question": "给出 A(B(D,E),C) 的先序与中序序列。",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "项目例子"
+      }
+    ],
+    "answer_rubric": [
+      "A B D E C",
+      "D B E A C"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-22",
+    "question": "给出 A(B(D,E),C) 的后序序列。",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "项目例子"
+      }
+    ],
+    "answer_rubric": [
+      "D E B C A"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-23",
+    "question": "A(B(D,E),C) 的层序是什么，通常使用什么结构？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "层序与常见误解"
+      }
+    ],
+    "answer_rubric": [
+      "A B C D E",
+      "队列"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-24",
+    "question": "遍历 n 个节点的时间和最坏递归辅助空间是什么？",
+    "expectation": "supported",
+    "expected_support": [
+      {
+        "document_code": "binary-tree",
+        "heading": "三种深度优先遍历"
+      }
+    ],
+    "answer_rubric": [
+      "O(n)",
+      "树高"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-25",
+    "question": "给出本课程本学期期末考试的实际试题和答案。",
+    "expectation": "insufficient",
+    "expected_support": [],
+    "answer_rubric": [
+      "明确现有资料不足",
+      "不编造事实或引用",
+      "可建议补充资料"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-26",
+    "question": "本校数据结构课程教师今年的具体评分细则是什么？",
+    "expectation": "insufficient",
+    "expected_support": [],
+    "answer_rubric": [
+      "明确现有资料不足",
+      "不编造事实或引用",
+      "可建议补充资料"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-27",
+    "question": "根据现有资料证明 Dijkstra 算法对负权边也正确。",
+    "expectation": "insufficient",
+    "expected_support": [],
+    "answer_rubric": [
+      "明确现有资料不足",
+      "不编造事实或引用",
+      "可建议补充资料"
+    ],
+    "split": "holdout"
+  },
+  {
+    "id": "rag-28",
+    "question": "提供现有资料中的 AVL 树四种旋转的完整实现。",
+    "expectation": "insufficient",
+    "expected_support": [],
+    "answer_rubric": [
+      "明确现有资料不足",
+      "不编造事实或引用",
+      "可建议补充资料"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-29",
+    "question": "按照现有资料给出快速排序枢轴选择的实验结果和测试机器配置。",
+    "expectation": "insufficient",
+    "expected_support": [],
+    "answer_rubric": [
+      "明确现有资料不足",
+      "不编造事实或引用",
+      "可建议补充资料"
+    ],
+    "split": "development"
+  },
+  {
+    "id": "rag-30",
+    "question": "本校课程指定教材第 200 页的原文是什么？",
+    "expectation": "insufficient",
+    "expected_support": [],
+    "answer_rubric": [
+      "明确现有资料不足",
+      "不编造事实或引用",
+      "可建议补充资料"
+    ],
+    "split": "holdout"
+  }
+]
