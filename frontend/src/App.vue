@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import { getHealth } from './api/health'
-import { navigation } from './router'
+import AccountMenu from './components/AccountMenu.vue'
+import { navigation, safeReturnPath } from './navigation'
+import { authState, restoreAccount } from './state/auth'
 
 const route = useRoute()
+const router = useRouter()
 const connection = ref<'checking' | 'connected' | 'disconnected'>('checking')
 const connectionLabel = computed(() => ({
   checking: '正在连接服务',
@@ -24,10 +27,38 @@ async function checkConnection() {
 }
 
 onMounted(checkConnection)
+
+watch(() => authState.account, (account) => {
+  if (!account && authState.status === 'ready' && route.meta.requiresAuth) {
+    void router.replace({ name: 'login', query: { redirect: safeReturnPath(route.fullPath) } })
+  }
+})
+
+async function retryAccount() {
+  await restoreAccount(true)
+  if (authState.status !== 'ready') return
+  if (!authState.account && route.meta.requiresAuth) {
+    await router.replace({ name: 'login', query: { redirect: safeReturnPath(route.fullPath) } })
+  } else if (authState.account && route.meta.authPage) {
+    await router.replace(safeReturnPath(route.query.redirect))
+  }
+}
 </script>
 
 <template>
-  <div class="workspace">
+  <div v-if="authState.status === 'loading' && !route.meta.authPage" class="account-loading" role="status">
+    正在恢复登录…
+  </div>
+  <div
+    v-else-if="authState.status === 'error' && !route.meta.authPage"
+    class="account-loading"
+    role="alert"
+  >
+    <p>{{ authState.error }}</p>
+    <button class="primary-button" type="button" @click="retryAccount">重新连接</button>
+  </div>
+  <RouterView v-else-if="route.meta.authPage || !authState.account" :key="authState.account?.user.id" />
+  <div v-else class="workspace">
     <aside class="sidebar">
       <RouterLink class="brand" to="/" aria-label="知序学习首页">
         <span class="brand-mark" aria-hidden="true">序</span>
@@ -48,26 +79,29 @@ onMounted(checkConnection)
         </RouterLink>
       </nav>
       <div class="sidebar-footer">
-        <span class="phase-label">初始化阶段</span>
+        <span class="phase-label">个人学习空间</span>
         <p>从理解概念，到独立解题。</p>
       </div>
     </aside>
     <div class="main-area">
       <header class="topbar">
         <span>学习空间 <span class="breadcrumb-separator">/</span> {{ route.meta.title }}</span>
-        <div class="connection-status" role="status" aria-live="polite">
-          <span class="status-dot" :class="connection" aria-hidden="true"></span>
-          {{ connectionLabel }}
-          <button
-            v-if="connection === 'disconnected'"
-            class="text-button"
-            type="button"
-            @click="checkConnection"
-          >重试</button>
+        <div class="topbar-actions">
+          <div class="connection-status" role="status" aria-live="polite">
+            <span class="status-dot" :class="connection" aria-hidden="true"></span>
+            {{ connectionLabel }}
+            <button
+              v-if="connection === 'disconnected'"
+              class="text-button"
+              type="button"
+              @click="checkConnection"
+            >重试</button>
+          </div>
+          <AccountMenu :key="authState.account.user.id" />
         </div>
       </header>
       <main id="main-content" class="page-content">
-        <RouterView />
+        <RouterView :key="authState.account.user.id" />
       </main>
     </div>
   </div>

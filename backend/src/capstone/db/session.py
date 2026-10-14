@@ -12,6 +12,7 @@ def create_database_engine(sqlite_path: Path) -> Engine:
     engine = create_engine(
         URL.create("sqlite", database=str(sqlite_path)),
         connect_args={"check_same_thread": False, "timeout": 5, "autocommit": False},
+        hide_parameters=True,
     )
 
     @event.listens_for(engine, "connect")

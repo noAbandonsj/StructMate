@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 
-import { navigation } from '../router'
+import { navigation } from '../navigation'
+import { authState } from '../state/auth'
 </script>
 
 <template>
   <section class="intro">
     <p class="eyebrow">DATA STRUCTURES</p>
-    <h1>一步一步，理解数据结构</h1>
+    <h1>{{ authState.account?.user.display_name }}，欢迎回来</h1>
     <p class="intro-copy">将资料、对话与练习放在同一个学习空间里。</p>
     <div class="notice">
-      网页基础框架已建立。课程资料、学习对话和练习功能将逐步接入。
+      个人知识库“{{ authState.account?.default_knowledge_base.name }}”已创建。
+      课程资料、学习对话和练习功能将逐步接入。
     </div>
   </section>
   <section aria-labelledby="learning-entry-title">

@@ -12,7 +12,7 @@
 body { margin: 0; min-width: 1100px; }
 a { color: inherit; text-decoration: none; }
 button { font: inherit; cursor: pointer; }
-button:focus-visible, a:focus-visible { outline: 3px solid #75a599; outline-offset: 4px; }
+button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #75a599; outline-offset: 4px; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { font-size: 36px; font-weight: 650; letter-spacing: -1px; margin-bottom: 16px; }
 h2 { font-size: 20px; font-weight: 600; }
@@ -56,3 +56,37 @@ h2 { font-size: 20px; font-weight: 600; }
 .empty-state h2 { margin-top: 22px; }
 .empty-state p { font-size: 14px; color: var(--muted); line-height: 1.8; }
 .primary-link { display: inline-block; background: var(--accent); color: white; border-radius: 8px; padding: 11px 20px; margin-top: 15px; font-size: 13px; }
+input { display: block; width: 100%; padding: 12px 14px; border: 1px solid #cbd6cd; border-radius: 8px; color: inherit; background: #fffefa; font: inherit; }
+label { display: block; margin: 20px 0 9px; font-size: 13px; font-weight: 600; }
+button:disabled { cursor: wait; opacity: .65; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.primary-button { border: 0; padding: 12px 20px; border-radius: 8px; background: var(--accent); color: white; font-size: 14px; }
+.primary-button:hover { background: #245648; }
+.secondary-button { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #f5f6f0; padding: 10px; color: var(--accent); }
+.account-loading { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; color: var(--muted); }
+.auth-layout { width: 1040px; min-height: 100vh; margin: 0 auto; display: grid; grid-template-columns: 1fr 420px; align-items: center; gap: 84px; padding: 54px 36px; }
+.auth-intro .brand { margin-bottom: 68px; padding: 0; width: fit-content; }
+.auth-intro h1 { line-height: 1.5; font-size: 40px; }
+.auth-intro .intro-copy { line-height: 2; }
+.auth-progress { margin-top: 48px; padding-left: 18px; border-left: 3px solid #a4b8a5; color: var(--muted); font-size: 13px; line-height: 1.9; }
+.auth-card { padding: 34px; border: 1px solid var(--line); border-radius: 16px; background: #fffefa; box-shadow: 0 14px 45px #263a3407; }
+.auth-card h2 { font-size: 26px; margin-bottom: 12px; }
+.auth-description { color: var(--muted); font-size: 13px; line-height: 1.8; margin-bottom: 20px; }
+.auth-card .eyebrow { font-size: 10px; margin-bottom: 14px; }
+.optional { margin-left: 6px; color: var(--muted); font-size: 11px; font-weight: 400; }
+.field-help { color: var(--muted); font-size: 11px; line-height: 1.7; margin: 8px 0 0; }
+.password-field { display: flex; position: relative; }
+.password-field input { padding-right: 60px; }
+.password-field button { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; }
+.form-error { color: #974b3d; background: #faf0ec; padding: 10px 12px; border-radius: 7px; font-size: 12px; line-height: 1.8; margin-top: 14px; }
+.auth-submit { width: 100%; margin-top: 26px; }
+.auth-alternate { text-align: center; margin: 24px 0 0; color: var(--muted); font-size: 12px; }
+.auth-alternate a { color: var(--accent); font-weight: 600; margin-left: 4px; }
+.topbar-actions { display: flex; align-items: center; gap: 26px; }
+.account-menu { position: relative; }
+.account-menu summary { cursor: pointer; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-panel { position: absolute; right: 0; top: 34px; z-index: 10; width: 280px; padding: 20px; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 22px #263a3412; background: #fffefa; }
+.account-panel label { margin-top: 12px; }
+.account-panel .text-button { display: block; margin: 10px 0; }
+.account-panel .secondary-button { margin-top: 12px; }
+.account-username { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; margin-bottom: 12px; }

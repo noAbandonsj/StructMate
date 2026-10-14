@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     data_dir: Path = REPOSITORY_ROOT / "data"
     cors_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
+    session_days: int = Field(default=7, ge=1, le=30)
 
     @model_validator(mode="after")
     def resolve_data_directory(self) -> Self:
