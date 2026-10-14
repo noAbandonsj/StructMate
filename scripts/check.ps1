@@ -15,6 +15,8 @@ try {
 }
 Push-Location -LiteralPath (Join-Path $taskRepoRoot 'frontend')
 try {
+    & pnpm.cmd test
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & pnpm.cmd build
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {

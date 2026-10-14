@@ -4,6 +4,7 @@ import HomeView from './views/HomeView.vue'
 import AuthView from './views/AuthView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 import SectionView from './views/SectionView.vue'
+import KnowledgeView from './views/KnowledgeView.vue'
 
 import { navigation, safeReturnPath } from './navigation'
 import { authState, restoreAccount } from './state/auth'
@@ -26,7 +27,7 @@ export const router = createRouter({
     ...navigation.map((page) => ({
       path: page.path,
       name: page.name,
-      component: page.name === 'home' ? HomeView : SectionView,
+      component: page.name === 'home' ? HomeView : page.name === 'knowledge' ? KnowledgeView : SectionView,
       meta: { title: page.title, description: page.description, requiresAuth: true },
     })),
     {
