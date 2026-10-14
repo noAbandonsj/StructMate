@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { useKnowledge } from '../state/knowledge'
+import DocumentPanel from '../components/DocumentPanel.vue'
 
 const { state, reload, selectLibrary } = useKnowledge()
 const search = ref('')
@@ -67,11 +68,10 @@ const dateLabel = computed(() => state.detail
           <h2>{{ state.detail.name }}</h2>
           <p class="field-help">创建于 {{ dateLabel }} · {{ state.detail.is_readonly ? '课程内容由维护者更新' : '资料仅供本账号使用' }}</p>
         </div>
-        <p class="library-next">
-          {{ state.detail.is_readonly ? '课程资料将在下一阶段导入。' : '上传与资料管理将在下一阶段开放。' }}
-        </p>
       </template>
     </section>
+
+    <DocumentPanel v-if="state.detail" :key="state.detail.id" :library="state.detail" :points="state.points" />
 
     <section class="course-catalog" aria-labelledby="catalog-title">
       <div class="section-heading">

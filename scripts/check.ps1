@@ -6,7 +6,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & uv run --locked ruff format --check .
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & uv run --locked pytest
+    & uv run --locked python -X utf8 -m pytest
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & uv run --locked alembic check
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

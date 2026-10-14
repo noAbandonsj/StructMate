@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     data_dir: Path = REPOSITORY_ROOT / "data"
     cors_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
     session_days: int = Field(default=7, ge=1, le=30)
+    upload_max_mib: int = Field(default=20, ge=1, le=100)
+    document_max_chars: int = Field(default=500_000, ge=1000, le=2_000_000)
+    pdf_max_pages: int = Field(default=300, ge=1, le=1000)
+    chunk_chars: int = Field(default=1200, ge=300, le=4000)
 
     @model_validator(mode="after")
     def resolve_data_directory(self) -> Self:

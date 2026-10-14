@@ -3,18 +3,29 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient
+from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker
 
 from capstone import __version__
 from capstone.api.auth import router as auth_router
+from capstone.api.documents import router as documents_router
 from capstone.api.health import router as health_router
 from capstone.api.knowledge import router as knowledge_router
 from capstone.core.errors import install_error_handlers
+from capstone.core.model_ports import EmbeddingService, UnconfiguredEmbedding
 from capstone.core.settings import Settings
+from capstone.core.upload_limits import UploadBodyLimit
 from capstone.db.session import create_database_engine
+from capstone.services.document_worker import DocumentWorker
+from capstone.services.storage import BlobStore
+from capstone.services.vectors import VectorIndex
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    embedding_service: EmbeddingService | None = None,
+) -> FastAPI:
     configuration = settings if settings is not None else Settings()
 
     @asynccontextmanager
@@ -22,13 +33,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         configuration.uploads_dir.mkdir(parents=True, exist_ok=True)
         engine = create_database_engine(configuration.sqlite_path)
         vector_client = None
+        worker = None
         try:
-            vector_client = QdrantClient(path=str(configuration.qdrant_dir))
+            vector_client = QdrantClient(
+                path=str(configuration.qdrant_dir),
+                force_disable_check_same_thread=True,
+            )
             app.state.engine = engine
             app.state.session_factory = sessionmaker(bind=engine)
             app.state.vector_client = vector_client
+            app.state.blob_store = BlobStore(configuration.uploads_dir)
+            app.state.vector_index = VectorIndex(vector_client, configuration.data_dir)
+            app.state.embedding_service = embedding_service or UnconfiguredEmbedding()
+            if inspect(engine).has_table("document_tasks"):
+                worker = DocumentWorker(
+                    app.state.session_factory,
+                    configuration,
+                    app.state.embedding_service,
+                    app.state.vector_index,
+                    app.state.blob_store,
+                )
+                worker.start()
+            app.state.document_worker = worker
             yield
         finally:
+            if worker is not None:
+                worker.stop()
             if vector_client is not None:
                 vector_client.close()
             engine.dispose()
@@ -41,6 +71,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = configuration
     install_error_handlers(app)
     app.add_middleware(
+        UploadBodyLimit,
+        maximum=configuration.upload_max_mib * 1024 * 1024 + 65536,
+    )
+    app.add_middleware(
         CORSMiddleware,
         allow_origins=configuration.cors_origins,
         allow_credentials=True,
@@ -50,4 +84,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(knowledge_router, prefix="/api/v1")
+    app.include_router(documents_router, prefix="/api/v1")
     return app

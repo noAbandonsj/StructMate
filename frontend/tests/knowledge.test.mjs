@@ -20,7 +20,7 @@ const response = (value, status = 200) => new Response(JSON.stringify(value), {
 const page = (items, total = items.length) => ({ items, total, page: 1, page_size: 100 })
 
 before(async () => {
-  server = await createServer({ server: { middlewareMode: true }, appType: 'custom' })
+  server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
   auth = await server.ssrLoadModule('/src/state/auth.ts')
   knowledge = await server.ssrLoadModule('/src/state/knowledge.ts')
   vue = await import('vue')

@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import Request
@@ -35,3 +36,16 @@ def create_database_engine(sqlite_path: Path) -> Engine:
 def get_session(request: Request) -> Iterator[Session]:
     with request.app.state.session_factory() as session:
         yield session
+
+
+@contextmanager
+def write_transaction(session: Session) -> Iterator[None]:
+    """Acquire SQLite's writer slot before reading mutable state in a short transaction."""
+    with session.begin():
+        connection = session.connection()
+        if connection.dialect.name == "sqlite":
+            # PEP-249 mode starts an empty deferred transaction on checkout.
+            # No application SQL has run yet; replace it before taking a snapshot.
+            connection.exec_driver_sql("COMMIT")
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+        yield

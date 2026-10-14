@@ -23,6 +23,7 @@ from capstone.core.auth import (
 )
 from capstone.core.errors import ApiError
 from capstone.db.models import AuthSession, KnowledgeBase, User, utc_now
+from capstone.db.session import write_transaction
 
 router = APIRouter(prefix="/auth", tags=["auth"], dependencies=[Depends(no_store)])
 credential_dependencies = [Depends(require_origin), Depends(require_json)]
@@ -106,7 +107,7 @@ def register(
 ) -> AccountResponse:
     password_hash = password_hasher.hash(data.password.get_secret_value())
     try:
-        with session.begin():
+        with write_transaction(session):
             user = User(
                 username=data.username,
                 display_name=data.display_name or data.username,
@@ -137,7 +138,7 @@ def login(
     password_hash = row.password_hash if row is not None else None
     if not verify_password(data.password.get_secret_value(), password_hash):
         raise ApiError(401, "INVALID_CREDENTIALS", "用户名或密码不正确。")
-    with session.begin():
+    with write_transaction(session):
         user = session.get(User, row.id)
         if user is None or user.password_hash != password_hash:
             raise ApiError(401, "INVALID_CREDENTIALS", "用户名或密码不正确。")
@@ -169,7 +170,7 @@ def update_profile(
     session: DatabaseSession,
 ) -> PublicUser:
     require_csrf(request, current)
-    with session.begin():
+    with write_transaction(session):
         record = session.get(AuthSession, current.id)
         user = session.get(User, current.user_id)
         if record is None or record.expires_at <= utc_now() or user is None:
@@ -185,7 +186,7 @@ def logout(request: Request, session: DatabaseSession) -> Response:
     current = load_session(request, session)
     if current is not None:
         require_csrf(request, current)
-        with session.begin():
+        with write_transaction(session):
             session.execute(delete(AuthSession).where(AuthSession.id == current.id))
     response = Response(status_code=204, headers={"Cache-Control": "no-store"})
     clear_session_cookie(response, request.app.state.settings)

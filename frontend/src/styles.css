@@ -108,3 +108,28 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .chapter-card summary { cursor: pointer; font-size: 15px; font-weight: 600; }
 .chapter-card summary span { float: right; font-size: 11px; font-weight: 400; color: var(--muted); }
 .chapter-card ul { padding-left: 24px; margin: 17px 0 0; font-size: 13px; line-height: 2.3; color: var(--muted); }
+.document-panel { margin-top: 35px; padding: 26px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; }
+.upload-form { margin: 20px 0; padding: 18px 22px; border-radius: 9px; background: #f5f6f0; }
+.upload-form label { margin-top: 0; }
+.upload-form input[type=file] { background: transparent; border: 0; padding: 4px 0; font-size: 13px; }
+.upload-options { margin: 14px 0; font-size: 12px; color: var(--muted); }
+.upload-options summary { cursor: pointer; margin-bottom: 9px; }
+.upload-options select { max-width: 280px; padding: 9px; border: 1px solid var(--line); border-radius: 6px; background: #fffefa; font: inherit; }
+.document-empty { padding: 24px; margin-top: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 8px; font-size: 13px; color: var(--muted); }
+.document-list { list-style: none; padding: 0; margin: 22px 0 0; }
+.document-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 20px 0; border-top: 1px solid var(--line); }
+.document-main { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.document-main strong { font-size: 14px; font-weight: 600; }
+.document-status { display: inline-block; margin-top: 10px; padding: 4px 8px; border-radius: 5px; background: #edf0e9; color: var(--muted); font-size: 11px; }
+.document-status.ready { background: #e7eee8; color: var(--accent); }
+.document-status.failed { background: #faf0ec; color: #974b3d; }
+.document-error { color: #974b3d; font-size: 12px; line-height: 1.8; margin: 10px 0 0; }
+.document-actions { display: flex; align-items: start; gap: 10px; padding-top: 3px; font-size: 12px; color: var(--accent); }
+.document-actions a { padding: 3px 5px; }
+.danger-button { color: #974b3d; }
+.delete-confirm { flex-basis: 100%; padding: 12px 16px; border-radius: 7px; background: #faf0ec; font-size: 12px; line-height: 1.8; }
+.delete-confirm p { margin-bottom: 8px; }
+.source-notice { font-size: 11px; color: var(--muted); margin-top: 12px; }
+.source-notice summary { cursor: pointer; }
+.source-notice a { color: var(--accent); }
+.document-pagination { display: flex; justify-content: flex-end; gap: 12px; align-items: center; margin-top: 18px; font-size: 12px; color: var(--muted); }

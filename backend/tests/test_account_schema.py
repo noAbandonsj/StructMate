@@ -28,6 +28,9 @@ def test_migration_matches_models_and_populated_database_can_be_downgraded(
         "auth_sessions",
         "knowledge_bases",
         "knowledge_points",
+        "documents",
+        "document_chunks",
+        "document_tasks",
     }
     seed_course_data(migrated_database)
     with Session(migrated_database) as session, session.begin():
