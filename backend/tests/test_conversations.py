@@ -1,6 +1,6 @@
 import time
 from threading import Event
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from alembic import command
 from fastapi.testclient import TestClient
@@ -385,3 +385,66 @@ def test_live_sse_emits_deltas_and_revokes_logged_out_stream(migrated_database, 
             server.should_exit = True
             thread.join(8)
             assert not thread.is_alive()
+
+
+def test_context_keeps_six_completed_pairs_and_excludes_failed_cancelled_questions(
+    migrated_database, tmp_path
+):
+    class RecordedEmbedding(TestEmbedding):
+        def __init__(self):
+            self.queries = []
+
+        def embed(self, texts):
+            self.queries.extend(texts)
+            return super().embed(texts)
+
+    embedding, generation = RecordedEmbedding(), TestGeneration()
+    settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
+    with TestClient(
+        create_app(settings, embedding_service=embedding, generation_service=generation)
+    ) as client:
+        library, headers = register(client)
+        document = upload(client, library, headers)["document"]["id"]
+        wait_document(client, document, "ready")
+        identifier = new_conversation(client, headers)
+        with Session(migrated_database) as session, write_transaction(session):
+            sequence = 0
+            for index, status in enumerate(["completed"] * 7 + ["failed", "cancelled"]):
+                sequence += 1
+                text = f"已完成提问{index}" if status == "completed" else status + "_question"
+                question = Message(
+                    id=uuid4(),
+                    conversation_id=UUID(identifier),
+                    sequence=sequence,
+                    role="user",
+                    content=text,
+                )
+                session.add(question)
+                session.flush()
+                sequence += 1
+                session.add(
+                    Message(
+                        conversation_id=UUID(identifier),
+                        sequence=sequence,
+                        role="assistant",
+                        content=f"已完成回答{index}",
+                        status=status,
+                        reply_to_message_id=question.id,
+                    )
+                )
+        embedding.queries.clear()
+        assert send(client, headers, identifier, content="新问题").status_code == 202
+        wait_answer(client, identifier)
+        history = generation.prompts[-1][1:-1]
+        expected = [
+            item
+            for index in range(1, 7)
+            for item in (
+                {"role": "user", "content": f"已完成提问{index}"},
+                {"role": "assistant", "content": f"已完成回答{index}"},
+            )
+        ]
+        assert history == expected
+        assert "failed_question" not in str(generation.prompts)
+        assert "cancelled_question" not in str(generation.prompts)
+        assert embedding.queries[-1] == "已完成提问6\n新问题"

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
 
 from sqlalchemy import select
+from sqlalchemy.orm import aliased
 
 from capstone.core.errors import ApiError
 from capstone.db.models import Conversation, Message
@@ -74,19 +75,29 @@ class ChatRunner:
                     answer.scope_snapshot["document_ids"],
                     answer.intent,
                 )
-                history = session.scalars(
-                    select(Message)
+                history_question = aliased(Message)
+                pairs = session.execute(
+                    select(history_question.content, Message.content)
+                    .join(history_question, history_question.id == Message.reply_to_message_id)
                     .where(
                         Message.conversation_id == conversation.id,
                         Message.sequence < question.sequence,
+                        Message.role == "assistant",
                         Message.status == "completed",
+                        history_question.conversation_id == conversation.id,
+                        history_question.role == "user",
+                        history_question.status == "completed",
                     )
                     .order_by(Message.sequence.desc())
-                    .limit(12)
+                    .limit(6)
                 ).all()
                 history = [
-                    {"role": item.role, "content": item.content[:6000]}
-                    for item in reversed(history)
+                    {"role": role, "content": content[:6000]}
+                    for previous_question, previous_answer in reversed(pairs)
+                    for role, content in (
+                        ("user", previous_question),
+                        ("assistant", previous_answer),
+                    )
                 ]
             previous_questions = [item["content"] for item in history if item["role"] == "user"]
             search_query = (
