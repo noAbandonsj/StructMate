@@ -154,3 +154,24 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .chat-composer textarea { width: 100%; resize: vertical; padding: 12px; font: inherit; border: 1px solid var(--chat-border); border-radius: 10px; box-sizing: border-box; }
 .composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .citation-pane pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; }
+.practice-layout { display: grid; grid-template-columns: 300px minmax(480px, 1fr); gap: 24px; align-items: start; }
+.practice-settings, .practice-main, .wrong-detail { background: white; border: 1px solid #dce5e5; border-radius: 16px; padding: 22px; min-width: 0; }
+.practice-settings fieldset { display: grid; gap: 14px; border: 0; padding: 0; min-width: 0; }
+.practice-settings label { display: grid; gap: 8px; font-size: 14px; }
+.practice-settings select, .practice-settings input, .practice-settings textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; }
+.practice-settings details, .performance-panel { margin: 16px 0; }
+.practice-progress { padding: 12px 16px; background: #eaf4ee; border-radius: 10px; }
+.question-card { border-top: 1px solid #dce5e5; padding: 20px 0; }
+.question-card h3 { white-space: pre-wrap; line-height: 1.7; overflow-wrap: anywhere; }
+.answer-options { display: grid; gap: 10px; border: 0; padding: 8px 0 18px; }
+.answer-options label { display: flex; gap: 10px; padding: 12px; background: #f7f9f7; border-radius: 8px; align-items: baseline; white-space: pre-wrap; }
+.question-actions { display: flex; gap: 12px; }
+.answer-result { background: #f1f7f2; border-radius: 12px; padding: 18px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-wrap; }
+.answer-result details { margin-top: 14px; }
+.answer-result textarea { width: 100%; min-height: 80px; box-sizing: border-box; }
+.wrong-filters { display: flex; gap: 24px; align-items: end; margin: 20px 0; }
+.wrong-filters label { display: grid; gap: 8px; }
+.wrong-layout { display: grid; grid-template-columns: minmax(440px, 1fr) minmax(300px, 0.8fr); gap: 24px; align-items: start; }
+.wrong-card { background: white; padding: 20px; border: 1px solid #dce5e5; border-radius: 12px; margin-bottom: 16px; }
+.wrong-card h2 { font-size: 17px; line-height: 1.7; }
+.attempt-history { padding-left: 20px; line-height: 2; }

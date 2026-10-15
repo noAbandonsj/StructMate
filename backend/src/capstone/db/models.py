@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -281,5 +281,141 @@ class Message(Base):
     scope_snapshot: Mapped[dict | None] = mapped_column(JSON)
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
+
+
+class Question(Base):
+    __tablename__ = "questions"
+    __table_args__ = (
+        CheckConstraint(
+            "(source_type = 'bank' AND owner_id IS NULL AND bank_key IS NOT NULL) OR "
+            "(source_type = 'ai' AND owner_id IS NOT NULL AND bank_key IS NULL)",
+            name="ck_questions_source_owner",
+        ),
+        CheckConstraint(
+            "difficulty IN ('basic', 'intermediate', 'advanced')", name="ck_questions_difficulty"
+        ),
+        UniqueConstraint("bank_key", name="uq_questions_bank_key"),
+        UniqueConstraint("owner_id", "content_fingerprint", name="uq_questions_owner_content"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    knowledge_point_id: Mapped[UUID] = mapped_column(
+        ForeignKey("knowledge_points.id", ondelete="RESTRICT"), index=True
+    )
+    source_type: Mapped[str] = mapped_column(String(8))
+    bank_code: Mapped[str | None] = mapped_column(String(64))
+    bank_key: Mapped[str | None] = mapped_column(String(160))
+    content_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    difficulty: Mapped[str] = mapped_column(String(16))
+    content: Mapped[dict] = mapped_column(JSON)
+    source_info: Mapped[dict] = mapped_column(JSON)
+    is_valid: Mapped[bool] = mapped_column(default=True)
+    available: Mapped[bool] = mapped_column(default=True)
+    disabled_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
+class PracticeSession(Base):
+    __tablename__ = "practice_sessions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "request_id", name="uq_practice_sessions_request"),
+        CheckConstraint(
+            "mode IN ('chapter', 'adaptive', 'review')", name="ck_practice_sessions_mode"
+        ),
+        CheckConstraint(
+            "(mode = 'review' AND question_source IS NULL) OR "
+            "(mode != 'review' AND question_source IN ('bank', 'ai') "
+            "AND question_source IS NOT NULL)",
+            name="ck_practice_sessions_source",
+        ),
+        CheckConstraint(
+            "status IN ('generating', 'ready', 'completed', 'failed')",
+            name="ck_practice_sessions_status",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    mode: Mapped[str] = mapped_column(String(16))
+    question_source: Mapped[str | None] = mapped_column(String(8))
+    settings: Mapped[dict] = mapped_column(JSON)
+    source_conversation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="RESTRICT")
+    )
+    request_id: Mapped[str] = mapped_column(String(64))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16), default="generating", index=True)
+    actual_count: Mapped[int] = mapped_column(default=0)
+    notice: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class PracticeItem(Base):
+    __tablename__ = "practice_items"
+    __table_args__ = (
+        UniqueConstraint("practice_session_id", "position", name="uq_practice_items_position"),
+        UniqueConstraint("practice_session_id", "question_id", name="uq_practice_items_question"),
+        CheckConstraint("position >= 1", name="ck_practice_items_position"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    practice_session_id: Mapped[UUID] = mapped_column(
+        ForeignKey("practice_sessions.id", ondelete="RESTRICT"), index=True
+    )
+    question_id: Mapped[UUID] = mapped_column(
+        ForeignKey("questions.id", ondelete="RESTRICT"), index=True
+    )
+    position: Mapped[int] = mapped_column()
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    hinted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    feedback: Mapped[dict | None] = mapped_column(JSON)
+
+
+class Attempt(Base):
+    __tablename__ = "attempts"
+    __table_args__ = (
+        UniqueConstraint("practice_item_id", name="uq_attempts_item"),
+        CheckConstraint(
+            "category IN ('first_independent', 'first_hinted', 'repeat', 'review')",
+            name="ck_attempts_category",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    practice_item_id: Mapped[UUID] = mapped_column(
+        ForeignKey("practice_items.id", ondelete="RESTRICT")
+    )
+    question_id: Mapped[UUID] = mapped_column(
+        ForeignKey("questions.id", ondelete="RESTRICT"), index=True
+    )
+    request_id: Mapped[str] = mapped_column(String(64))
+    answer: Mapped[str] = mapped_column(String(16))
+    is_correct: Mapped[bool] = mapped_column()
+    hinted: Mapped[bool] = mapped_column()
+    category: Mapped[str] = mapped_column(String(24))
+    is_valid: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, index=True)
+
+
+class WrongQuestion(Base):
+    __tablename__ = "wrong_questions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "question_id", name="uq_wrong_questions_owner"),
+        CheckConstraint("status IN ('pending', 'consolidated')", name="ck_wrong_questions_status"),
+        CheckConstraint("correct_days BETWEEN 0 AND 2", name="ck_wrong_questions_days"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    question_id: Mapped[UUID] = mapped_column(
+        ForeignKey("questions.id", ondelete="RESTRICT"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    correct_days: Mapped[int] = mapped_column(default=0)
+    last_correct_date: Mapped[date | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)

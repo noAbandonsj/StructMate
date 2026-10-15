@@ -7,7 +7,7 @@
 - question-bank.json 是 15 道固定题目的首批数据，每个初始主题 5 道；题干与选项为项目编写，知识依据可追溯到笔记和原始来源。
 - rag-evaluation.json 是 30 个固定评估问题，其中 24 个有支持依据，6 个要求识别现有资料不足；没有填入模型实测结果。
 
-在 backend 执行 `uv run --locked python -X utf8 -m capstone.import_course`，将三个笔记及来源许可登记到课程库，重复内容不重复写入。先执行迁移与 capstone.seed。后端处理队列，真实 Embedding 与向量写入成功后才为 ready；未配置时保留文件并失败。接通服务后可加 `--retry-failed` 重处理既有失败资料。命令不另开 Qdrant 客户端，可与单进程后端共用队列。题库数据尚未导入练习模块，评估问题尚未实际调用模型。
+在 backend 执行 `uv run --locked python -X utf8 -m capstone.import_course`，将三个笔记及来源许可登记到课程库，重复内容不重复写入。先执行迁移与 capstone.seed。后端处理队列，真实 Embedding 与向量写入成功后才为 ready；未配置时保留文件并失败。接通服务后可加 `--retry-failed` 重处理既有失败资料。命令不另开 Qdrant 客户端，可与单进程后端共用队列。题库可通过 `uv run --locked python -X utf8 -m capstone.manage_questions import` 导入并用于练习，不依赖模型；重复包不重复写入，修改后的题目生成新记录，原分发快照保留。评估问题尚未实际调用模型。
 
 ## 来源与许可
 

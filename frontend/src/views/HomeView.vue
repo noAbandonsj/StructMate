@@ -11,9 +11,10 @@ import { authState } from '../state/auth'
     <h1>{{ authState.account?.user.display_name }}，欢迎回来</h1>
     <p class="intro-copy">将资料、对话与练习放在同一个学习空间里。</p>
     <RouterLink class="primary-link" to="/chat">开始学习</RouterLink>
+    <RouterLink class="text-button" to="/practice">先做基础练习</RouterLink>
     <div class="notice">
       个人知识库“{{ authState.account?.default_knowledge_base.name }}”已创建。
-      资料管理和学习会话已接入，实际答疑需接通模型；练习等功能继续完善。
+      资料管理、学习会话、题库练习和错题复习已接入。真实答疑与 AI 出题需接通模型，报告与推荐继续完善。
     </div>
   </section>
   <section aria-labelledby="learning-entry-title">

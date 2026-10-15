@@ -33,6 +33,11 @@ def test_migration_matches_models_and_populated_database_can_be_downgraded(
         "document_tasks",
         "conversations",
         "messages",
+        "questions",
+        "practice_sessions",
+        "practice_items",
+        "attempts",
+        "wrong_questions",
     }
     seed_course_data(migrated_database)
     with Session(migrated_database) as session, session.begin():

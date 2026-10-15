@@ -2,7 +2,7 @@ import { reactive } from 'vue'
 
 import * as api from '../api/auth'
 import { ApiError } from '../api/client'
-import { clearDrafts } from './chat-drafts'
+import { clearDrafts } from './learning-drafts'
 
 export const authState = reactive<{
   status: 'loading' | 'ready' | 'error'

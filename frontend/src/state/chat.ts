@@ -2,7 +2,7 @@ import { computed, onScopeDispose, reactive, watch, type Ref } from 'vue'
 import * as api from '../api/chat'
 import { ApiError } from '../api/client'
 import { authState, restoreAccount } from './auth'
-import { readDraft, saveDraft } from './chat-drafts'
+import { readDraft, saveDraft } from './learning-drafts'
 
 export function useChat(selected: Ref<string>) {
   const state = reactive({

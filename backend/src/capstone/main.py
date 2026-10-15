@@ -12,6 +12,7 @@ from capstone.api.conversations import router as conversations_router
 from capstone.api.documents import router as documents_router
 from capstone.api.health import router as health_router
 from capstone.api.knowledge import router as knowledge_router
+from capstone.api.practice import router as practice_router
 from capstone.core.errors import install_error_handlers
 from capstone.core.model_ports import (
     EmbeddingService,
@@ -24,6 +25,7 @@ from capstone.core.upload_limits import UploadBodyLimit
 from capstone.db.session import create_database_engine
 from capstone.services.chat_runner import ChatRunner
 from capstone.services.document_worker import DocumentWorker
+from capstone.services.practice_runner import PracticeRunner
 from capstone.services.storage import BlobStore
 from capstone.services.vectors import VectorIndex
 
@@ -43,6 +45,7 @@ def create_app(
         vector_client = None
         worker = None
         chat_runner = None
+        practice_runner = None
         try:
             vector_client = QdrantClient(
                 path=str(configuration.qdrant_dir),
@@ -65,6 +68,16 @@ def create_app(
                 )
                 chat_runner.start()
             app.state.chat_runner = chat_runner
+            if inspect(engine).has_table("practice_sessions"):
+                practice_runner = PracticeRunner(
+                    app.state.session_factory,
+                    configuration,
+                    app.state.generation_service,
+                    app.state.embedding_service,
+                    app.state.vector_index,
+                )
+                practice_runner.start()
+            app.state.practice_runner = practice_runner
             if inspect(engine).has_table("document_tasks"):
                 worker = DocumentWorker(
                     app.state.session_factory,
@@ -77,6 +90,8 @@ def create_app(
             app.state.document_worker = worker
             yield
         finally:
+            if practice_runner is not None:
+                practice_runner.stop()
             if chat_runner is not None:
                 chat_runner.stop()
             if worker is not None:
@@ -108,4 +123,5 @@ def create_app(
     app.include_router(knowledge_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(conversations_router, prefix="/api/v1")
+    app.include_router(practice_router, prefix="/api/v1")
     return app
