@@ -251,6 +251,27 @@ def document_chunks(
     )
 
 
+@router.get("/documents/{document_id}/chunks/{chunk_id}", response_model=ChunkInfo)
+def chunk_detail(
+    document_id: UUID, chunk_id: UUID, current: AuthenticatedSession, session: DatabaseSession
+):
+    document = get_document(session, document_id, current.user_id)
+    if document.status == "deleted":
+        raise ApiError(410, "DOCUMENT_DELETED", "资料已删除，原片段不再提供。")
+    if document.status != "ready":
+        raise ApiError(409, "DOCUMENT_NOT_READY", "资料尚未处理完成，暂不能用于学习。")
+    chunk = session.scalar(
+        select(DocumentChunk).where(
+            DocumentChunk.id == chunk_id,
+            DocumentChunk.document_id == document.id,
+            DocumentChunk.index_revision == document.index_revision,
+        )
+    )
+    if chunk is None:
+        raise ApiError(404, "CHUNK_NOT_FOUND", "资料片段不存在或已更新。")
+    return ChunkInfo.model_validate(chunk)
+
+
 @router.post(
     "/documents/{document_id}/process",
     status_code=202,

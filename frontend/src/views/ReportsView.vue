@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import LearningStats from '../components/LearningStats.vue'
+import RecommendationPanel from '../components/RecommendationPanel.vue'
 import { useReports } from '../state/reports'
 import { exportUrl } from '../api/reports'
 const route = useRoute(), router = useRouter()
@@ -31,5 +32,6 @@ async function save() { const report = await generate(); if (report) { if (selec
         <p v-else class="field-help">选择一份历史报告查看，或按上方日期范围保存新报告。</p>
       </article>
     </div>
+    <RecommendationPanel />
   </section>
 </template>

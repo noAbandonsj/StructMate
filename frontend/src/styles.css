@@ -191,3 +191,12 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .stats-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
 .stats-table th, .stats-table td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #dce5e5; }
 .stats-table caption { text-align: left; font-weight: 600; margin-bottom: 12px; }
+.recommendation-panel { border-top: 1px solid #dce5e5; margin-top: 26px; padding-top: 22px; }
+.recommendation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.recommendation-card { background: #f8faf7; border: 1px solid #dce5e5; border-radius: 12px; padding: 18px; min-width: 0; overflow-wrap: anywhere; }
+.recommendation-card h3 { font-size: 16px; line-height: 1.6; }
+.recommendation-card p { font-size: 13px; line-height: 1.7; }
+.recommendation-card ul { padding-left: 18px; }
+.recommendation-preview { border: 1px solid #bdcdca; padding: 20px; border-radius: 10px; background: white; margin: 18px 0; }
+.recommendation-preview pre { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.chat-recommendations { margin-top: 22px; }

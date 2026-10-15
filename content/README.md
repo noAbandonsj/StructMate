@@ -21,3 +21,7 @@ Open Data Structures（Pat Morin）的 [项目主页](https://opendatastructures
 
 修改题目时重新核对题干、选项、答案、解析与来源。已分发题目的历史快照不得被源文件修改覆盖；后续入库时保留此边界。
 后端 tests/test_content.py 检查文件摘要、知识点与来源关系、题目结构及确定性操作题答案。它不调用模型，也不宣称 RAG 效果已验证。
+
+## 推荐资源
+
+resources.json 登记 6 条已核对的 Open Data Structures 资源外链，记录课程章节、维护者评定难度、语言、作者、许可与核对日期（2026-10-15）。仅保存链接及项目编写的阅读简介，不下载网页正文。难度是阅读建议，不是原作者的难度认证。维护者在 backend 执行 `uv run --locked python -X utf8 -m capstone.manage_resources`，或使用 `--file` 指定同结构 JSON；整包校验后事务导入，按 code 更新，重复不新增；is_active=false 停用。运行前需迁移与初始化目录。页面只显示启用记录，外部站点今后可能变更，需要维护者复核链接；不是每次展示都重新联网检查。

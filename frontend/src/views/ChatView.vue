@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useChat } from '../state/chat'
 import SummaryPanel from '../components/SummaryPanel.vue'
+import RecommendationPanel from '../components/RecommendationPanel.vue'
 import type { Citation, Scope } from '../api/chat'
 import { documentFileUrl, getDocument } from '../api/documents'
 
@@ -97,6 +98,7 @@ function referenced(piece: string, citations: Citation[]) {
             <p v-if="state.conversation.archived" class="field-help">会话已归档，恢复后可继续提问。</p>
           </form>
           <SummaryPanel :id="selected" :summary="state.summary" :can-generate="!!state.config?.generation_available" :busy="state.busy" :loading="state.loading || state.summaryLoading" :error="state.summaryError" @generate="generateSummary" @refresh="refreshSummary" />
+          <details class="chat-recommendations"><summary>阅读相关资料</summary><RecommendationPanel :point-id="practicePoint || undefined" /></details>
         </template>
       </div>
       <aside v-if="citation" class="citation-pane" aria-label="引用原文">

@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { navigation } from '../navigation'
 import { authState } from '../state/auth'
 import { useOverview } from '../state/overview'
+import RecommendationPanel from '../components/RecommendationPanel.vue'
 const { state, reload } = useOverview()
 </script>
 
@@ -45,4 +46,5 @@ const { state, reload } = useOverview()
       </RouterLink>
     </div>
   </section>
+  <RecommendationPanel />
 </template>
