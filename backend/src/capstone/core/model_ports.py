@@ -6,6 +6,7 @@ from threading import Event
 from typing import Protocol
 
 from capstone.core.errors import ApiError
+from capstone.core.model_config import ModelConnection
 
 
 @dataclass(frozen=True)
@@ -45,11 +46,16 @@ class EmbeddingService(Protocol):
 class UnconfiguredEmbedding:
     available = False
 
+    def __init__(self, connection: ModelConnection | None = None):
+        self.connection = connection
+
     def embed(self, texts: list[str]) -> EmbeddingBatch:
         raise ApiError(
             503,
             "EMBEDDING_NOT_CONFIGURED",
-            "向量模型尚未接通，文件已保留；配置服务后可重试。",
+            "向量连接参数已配置，调用协议适配尚未接通；文件已保留。"
+            if self.connection
+            else "向量模型尚未接通，文件已保留；配置服务后可重试。",
         )
 
 
@@ -62,5 +68,14 @@ class GenerationService(Protocol):
 class UnconfiguredGeneration:
     available = False
 
+    def __init__(self, connection: ModelConnection | None = None):
+        self.connection = connection
+
     def stream(self, messages: list[dict[str, str]], cancelled: Event) -> Iterator[str]:
-        raise ApiError(503, "GENERATION_NOT_CONFIGURED", "生成模型尚未接通，请配置后重试。")
+        raise ApiError(
+            503,
+            "GENERATION_NOT_CONFIGURED",
+            "生成连接参数已配置，调用协议适配尚未接通。"
+            if self.connection
+            else "生成模型尚未接通，请配置后重试。",
+        )

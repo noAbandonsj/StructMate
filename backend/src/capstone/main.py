@@ -63,8 +63,12 @@ def create_app(
             app.state.vector_client = vector_client
             app.state.blob_store = BlobStore(configuration.uploads_dir)
             app.state.vector_index = VectorIndex(vector_client, configuration.data_dir)
-            app.state.embedding_service = embedding_service or UnconfiguredEmbedding()
-            app.state.generation_service = generation_service or UnconfiguredGeneration()
+            app.state.embedding_service = embedding_service or UnconfiguredEmbedding(
+                configuration.connection("embedding")
+            )
+            app.state.generation_service = generation_service or UnconfiguredGeneration(
+                configuration.connection("generation")
+            )
             if inspect(engine).has_table("messages"):
                 chat_runner = ChatRunner(
                     app.state.session_factory,
