@@ -33,6 +33,7 @@ from capstone.services.report_runner import ReportRunner
 from capstone.services.storage import BlobStore
 from capstone.services.summary_runner import SummaryRunner
 from capstone.services.vectors import VectorIndex
+from capstone.web import install_frontend
 
 
 def create_app(
@@ -157,4 +158,6 @@ def create_app(
     app.include_router(summaries_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(recommendations_router, prefix="/api/v1")
+    if configuration.serve_frontend:
+        install_frontend(app)
     return app

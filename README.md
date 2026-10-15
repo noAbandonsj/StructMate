@@ -65,6 +65,7 @@ Pop-Location
 健康接口：`http://127.0.0.1:8000/api/v1/health`。网页 /api 通过 Vite 代理到后端。
 
 后端开发可使用 `.\scripts\start-backend.ps1 -Reload`。终端中按 Ctrl+C 停止各自服务。
+构建版本可先在 frontend 执行 `pnpm.cmd build`，再运行 `.\scripts\start-backend.ps1 -ServeWeb`，直接访问 `http://127.0.0.1:8000`，无需启动 Vite。网页刷新与 API 均由同一个后端处理；完整安装、操作及备份说明见 [部署与使用说明](docs/部署与使用说明.md)。
 若 PowerShell 执行策略阻止本地脚本，可在当前调用使用
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-backend.ps1`，其他脚本同理。
 

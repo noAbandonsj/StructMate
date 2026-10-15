@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     )
 
     environment: Literal["development", "test", "production"] = "development"
+    serve_frontend: bool = False
     data_dir: Path = REPOSITORY_ROOT / "data"
     cors_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
     session_days: int = Field(default=7, ge=1, le=30)
