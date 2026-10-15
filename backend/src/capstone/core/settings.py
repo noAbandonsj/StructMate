@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     document_max_chars: int = Field(default=500_000, ge=1000, le=2_000_000)
     pdf_max_pages: int = Field(default=300, ge=1, le=1000)
     chunk_chars: int = Field(default=1200, ge=300, le=4000)
+    retrieval_min_score: float = Field(default=0.25, ge=-1, le=1)
 
     @model_validator(mode="after")
     def resolve_data_directory(self) -> Self:

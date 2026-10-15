@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, toRef, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { documentFileUrl } from '../api/documents'
 import type { LibraryInfo, KnowledgePoint } from '../api/knowledge'
@@ -109,6 +110,7 @@ function safeLink(url: string) {
           </details>
         </div>
         <div class="document-actions">
+          <RouterLink v-if="document.status === 'ready'" :to="{ path: '/chat', query: { document: document.id, point: document.knowledge_point_id || undefined } }">学习这份资料</RouterLink>
           <a :href="documentFileUrl(document.id)" target="_blank" rel="noopener noreferrer">预览</a>
           <a :href="documentFileUrl(document.id, true)" target="_blank" rel="noopener noreferrer">下载</a>
           <button v-if="!library.is_readonly && document.retryable" class="text-button" type="button"

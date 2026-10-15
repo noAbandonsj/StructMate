@@ -1,6 +1,8 @@
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from math import isfinite
+from threading import Event
 from typing import Protocol
 
 from capstone.core.errors import ApiError
@@ -49,3 +51,16 @@ class UnconfiguredEmbedding:
             "EMBEDDING_NOT_CONFIGURED",
             "向量模型尚未接通，文件已保留；配置服务后可重试。",
         )
+
+
+class GenerationService(Protocol):
+    available: bool
+
+    def stream(self, messages: list[dict[str, str]], cancelled: Event) -> Iterator[str]: ...
+
+
+class UnconfiguredGeneration:
+    available = False
+
+    def stream(self, messages: list[dict[str, str]], cancelled: Event) -> Iterator[str]:
+        raise ApiError(503, "GENERATION_NOT_CONFIGURED", "生成模型尚未接通，请配置后重试。")

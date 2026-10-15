@@ -99,3 +99,37 @@ class VectorIndex:
                     ),
                     wait=True,
                 )
+
+    def search(self, batch: EmbeddingBatch, revisions: list[tuple[UUID, int]], minimum: float):
+        dimension = batch.validate(1)
+        if not revisions:
+            return []
+        with self.lock:
+            if not self.client.collection_exists(COLLECTION):
+                raise ApiError(503, "INDEX_MISSING", "向量索引缺失，请由维护者重新处理资料。")
+            self._ensure(batch, dimension)
+            # Match document and revision as a pair; never mix independent lists.
+            pairs = [
+                Filter(
+                    must=[
+                        FieldCondition(key="document_id", match=MatchValue(value=str(identifier))),
+                        FieldCondition(key="index_revision", match=MatchValue(value=revision)),
+                    ]
+                )
+                for identifier, revision in revisions
+            ]
+            return self.client.query_points(
+                COLLECTION,
+                query=batch.vectors[0],
+                query_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="embedding_fingerprint", match=MatchValue(value=batch.fingerprint)
+                        )
+                    ],
+                    should=pairs,
+                ),
+                limit=6,
+                with_payload=True,
+                score_threshold=minimum,
+            ).points

@@ -1,7 +1,17 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from capstone.db.base import Base
@@ -207,6 +217,68 @@ class DocumentTask(Base):
     action: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     attempt_count: Mapped[int] = mapped_column(default=0)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    __table_args__ = (
+        CheckConstraint(
+            "scope IN ('combined', 'course', 'personal')", name="ck_conversations_scope"
+        ),
+        CheckConstraint("length(title) BETWEEN 1 AND 100", name="ck_conversations_title"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    title: Mapped[str] = mapped_column(String(100), default="新的学习")
+    scope: Mapped[str] = mapped_column(String(16), default="combined")
+    document_ids: Mapped[list] = mapped_column(JSON, default=list)
+    knowledge_point_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("knowledge_points.id", ondelete="RESTRICT")
+    )
+    archived: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
+
+
+class Message(Base):
+    __tablename__ = "messages"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "sequence", name="uq_messages_sequence"),
+        UniqueConstraint("conversation_id", "request_id", name="uq_messages_request"),
+        CheckConstraint("sequence > 0", name="ck_messages_sequence"),
+        CheckConstraint("role IN ('user', 'assistant')", name="ck_messages_role"),
+        CheckConstraint(
+            "status IN ('generating', 'completed', 'failed', 'cancelled')",
+            name="ck_messages_status",
+        ),
+        CheckConstraint("intent IN ('explain', 'hint', 'example')", name="ck_messages_intent"),
+        Index(
+            "uq_messages_active",
+            "conversation_id",
+            unique=True,
+            sqlite_where=text("role = 'assistant' AND status = 'generating'"),
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="RESTRICT"), index=True
+    )
+    sequence: Mapped[int] = mapped_column()
+    role: Mapped[str] = mapped_column(String(16))
+    reply_to_message_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="RESTRICT")
+    )
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    request_hash: Mapped[str | None] = mapped_column(String(64))
+    content: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="completed")
+    intent: Mapped[str] = mapped_column(String(16), default="explain")
+    citations: Mapped[list] = mapped_column(JSON, default=list)
+    scope_snapshot: Mapped[dict | None] = mapped_column(JSON)
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)

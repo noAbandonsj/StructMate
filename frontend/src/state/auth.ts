@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 
 import * as api from '../api/auth'
 import { ApiError } from '../api/client'
+import { clearDrafts } from './chat-drafts'
 
 export const authState = reactive<{
   status: 'loading' | 'ready' | 'error'
@@ -19,6 +20,8 @@ let generation = 0
 let pendingRestore: Promise<void> | null = null
 
 function acceptAccount(account: api.AccountResponse | null) {
+  const previous = authState.account?.user.id
+  if (previous && previous !== account?.user.id) clearDrafts(previous)
   generation++
   authState.account = account
   authState.status = 'ready'
