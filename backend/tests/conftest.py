@@ -25,3 +25,14 @@ def migrated_database(migration_config: Config, tmp_path: Path) -> Iterator[Engi
         yield engine
     finally:
         engine.dispose()
+
+
+@pytest.fixture
+def bank_database(migrated_database):
+    from capstone.manage_questions import import_bank
+    from capstone.seed import seed_course_data
+
+    seed_course_data(migrated_database)
+    assert import_bank(migrated_database) == (15, 0)
+    assert import_bank(migrated_database) == (0, 15)
+    return migrated_database

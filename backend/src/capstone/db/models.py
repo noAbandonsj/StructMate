@@ -420,3 +420,31 @@ class WrongQuestion(Base):
     last_correct_date: Mapped[date | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
+
+
+class LearningReport(Base):
+    __tablename__ = "learning_reports"
+    __table_args__ = (
+        UniqueConstraint("user_id", "request_id", name="uq_learning_reports_request"),
+        CheckConstraint("from_date <= to_date", name="ck_learning_reports_dates"),
+        CheckConstraint(
+            "status IN ('generating', 'completed', 'failed')", name="ck_learning_reports_status"
+        ),
+        CheckConstraint(
+            "status != 'completed' OR length(trim(content)) > 0", name="ck_learning_reports_content"
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    from_date: Mapped[date] = mapped_column()
+    to_date: Mapped[date] = mapped_column()
+    cutoff_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16), default="generating", index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    request_id: Mapped[str] = mapped_column(String(64))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+    generated_at: Mapped[datetime | None] = mapped_column(UTCDateTime())

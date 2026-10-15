@@ -3,6 +3,8 @@ import { RouterLink } from 'vue-router'
 
 import { navigation } from '../navigation'
 import { authState } from '../state/auth'
+import { useOverview } from '../state/overview'
+const { state, reload } = useOverview()
 </script>
 
 <template>
@@ -14,8 +16,15 @@ import { authState } from '../state/auth'
     <RouterLink class="text-button" to="/practice">先做基础练习</RouterLink>
     <div class="notice">
       个人知识库“{{ authState.account?.default_knowledge_base.name }}”已创建。
-      资料管理、学习会话、题库练习和错题复习已接入。真实答疑与 AI 出题需接通模型，报告与推荐继续完善。
+      可以直接使用课程资料，上传自己的资料也是可选路径。真实答疑与 AI 出题需接通模型。
     </div>
+  </section>
+  <section class="report-panel" aria-labelledby="recent-learning-title">
+    <div class="section-heading"><h2 id="recent-learning-title">最近 7 天</h2><RouterLink to="/reports">查看完整统计</RouterLink></div>
+    <p v-if="state.loading">正在读取学习记录…</p><p v-if="state.error" class="form-error" role="alert">{{ state.error }} <button @click="reload()">重试</button></p>
+    <template v-if="state.data"><p class="field-help">{{ state.data.stats.from_date }} 至 {{ state.data.stats.to_date }} · 上海日期</p><div class="stats-grid"><div><span>有效作答</span><strong>{{ state.data.stats.attempts.count }} 次</strong></div><div><span>独立新题</span><strong>{{ state.data.stats.categories.first_independent.count }} 道</strong></div><div><span>完成回答</span><strong>{{ state.data.stats.learning.completed_answers }} 次</strong></div><div><span>当前待复习</span><strong>{{ state.data.stats.wrong_questions.current_pending }} 道</strong><small>不限日期范围</small></div></div>
+      <div class="reports-layout"><div><h3>继续对话</h3><p v-if="!state.data.recent_conversations.length" class="field-help">暂无会话，点击“开始学习”提出第一个问题。</p><RouterLink v-for="item in state.data.recent_conversations" :key="item.id" class="conversation-link" :to="'/chat/' + item.id">{{ item.title }}</RouterLink></div><div><h3>最近练习</h3><p v-if="!state.data.recent_practices.length" class="field-help">暂无练习，可以先做一组基础题。</p><RouterLink v-for="item in state.data.recent_practices" :key="item.id" class="conversation-link" :to="'/practice/' + item.id">{{ item.mode === 'review' ? '错题复习' : item.question_source === 'ai' ? 'AI 练习' : '题库练习' }} · {{ item.submitted_count }}/{{ item.actual_count }} 已答 · {{ item.status === 'completed' ? '已完成' : item.status === 'failed' ? '生成失败' : item.status === 'generating' ? '生成中' : '继续作答' }}</RouterLink></div></div>
+    </template>
   </section>
   <section aria-labelledby="learning-entry-title">
     <div class="section-heading">

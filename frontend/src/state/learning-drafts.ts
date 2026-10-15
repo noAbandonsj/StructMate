@@ -1,4 +1,4 @@
-type Kind = 'chat' | 'practice'
+type Kind = 'chat' | 'practice' | 'reports'
 const prefix = (kind: Kind) => 'capstone.' + kind + '.'
 export function draftKey(user: string, conversation: string, kind: Kind = 'chat') { return prefix(kind) + user + '.' + conversation }
 export function readDraft(user: string, conversation: string, kind: Kind = 'chat'): string {
@@ -14,7 +14,7 @@ export function clearDrafts(user: string) {
   try {
     for (let index = sessionStorage.length - 1; index >= 0; index--) {
       const key = sessionStorage.key(index)
-      if (key && (['chat', 'practice'] as Kind[]).some(kind => key.startsWith(prefix(kind) + user + '.'))) sessionStorage.removeItem(key)
+      if (key && (['chat', 'practice', 'reports'] as Kind[]).some(kind => key.startsWith(prefix(kind) + user + '.'))) sessionStorage.removeItem(key)
     }
   } catch { /* No browser storage in Node tests. */ }
 }

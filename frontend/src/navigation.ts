@@ -10,6 +10,6 @@ export const navigation = [
 export function safeReturnPath(value: unknown): string {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/'
   const path = value.split(/[?#]/, 1)[0]
-  if (path && /^\/(chat|practice|wrong)\/[0-9a-f-]{36}$/.test(path)) return value
+  if (path && /^\/(chat|practice|wrong|reports)\/[0-9a-f-]{36}$/.test(path)) return value
   return navigation.some((page) => page.path === path) ? value : '/'
 }

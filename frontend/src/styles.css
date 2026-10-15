@@ -179,3 +179,15 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .summary-panel h2 { font-size: 18px; }
 .summary-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; margin: 16px 0; }
 .summary-panel > .primary-button { display: block; margin-top: 14px; }
+.report-panel { background: white; border: 1px solid #dce5e5; border-radius: 16px; padding: 24px; margin: 20px 0; min-width: 0; }
+.report-range { display: flex; gap: 20px; align-items: end; margin-bottom: 20px; }
+.report-range label { display: grid; gap: 8px; }
+.report-range input { padding: 8px; font: inherit; border: 1px solid #bdcdca; border-radius: 6px; }
+.reports-layout { display: grid; grid-template-columns: minmax(250px, 0.65fr) minmax(480px, 1.65fr); gap: 24px; align-items: start; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 22px 0; }
+.stats-grid > div { background: #f3f7f2; border-radius: 10px; padding: 16px; }
+.stats-grid span, .stats-grid small { display: block; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.stats-grid strong { display: block; font-size: 24px; margin: 8px 0; color: var(--accent); }
+.stats-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+.stats-table th, .stats-table td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #dce5e5; }
+.stats-table caption { text-align: left; font-weight: 600; margin-bottom: 12px; }

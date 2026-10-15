@@ -22,17 +22,8 @@ from capstone.db.models import (
     WrongQuestion,
 )
 from capstone.main import create_app
-from capstone.manage_questions import import_bank, invalidate
-from capstone.seed import seed_course_data
+from capstone.manage_questions import invalidate
 from capstone.services import practice as practice_service
-
-
-@pytest.fixture
-def bank_database(migrated_database):
-    seed_course_data(migrated_database)
-    assert import_bank(migrated_database) == (15, 0)
-    assert import_bank(migrated_database) == (0, 15)
-    return migrated_database
 
 
 def create(client, headers, key="practice-1", **settings):
