@@ -47,6 +47,7 @@ function scope(id = 'one', user = 'student') {
   return { selected, effect, ...effect.run(() => chat.useChat(selected)) }
 }
 function defaultFetch(url) {
+  if (url.endsWith('/summary')) return Promise.resolve(response({ status: 'empty', content: '', message_count: 0, cutoff_sequence: 0, cutoff_at: null, generated_at: null, has_newer_messages: false }))
   if (url.includes('/config')) return Promise.resolve(response({ generation_available: true, embedding_available: true }))
   if (url.includes('/messages?')) return Promise.resolve(response(page([message('answer')])))
   if (url.includes('/conversations?')) return Promise.resolve(response(page([conversation('one')])))
@@ -163,5 +164,80 @@ test('an earlier refresh cannot overwrite a newer result in the same conversatio
     resolveOld(response({ ...conversation('one'), title: '旧名称' }))
     await old
     assert.equal(view.state.conversation.title, '最新名称')
+  } finally { view.effect.stop() }
+})
+
+test('summary network retries reuse the request key and keep the question draft', async () => {
+  const submitted = []
+  let completed = false
+  const info = () => ({ status: completed ? 'completed' : 'generating', content: completed ? '本次总结' : '', message_count: completed ? 2 : 0, cutoff_sequence: completed ? 2 : 0, has_newer_messages: false })
+  globalThis.fetch = (url, options) => {
+    if (url.endsWith('/summary') && options.method === 'POST') {
+      submitted.push(JSON.parse(options.body))
+      if (submitted.length === 1) return Promise.reject(new Error('network failed'))
+      return Promise.resolve(response(info()))
+    }
+    return defaultFetch(url)
+  }
+  const view = scope('one', 'summary-owner')
+  try {
+    await until(() => !view.state.loading && view.state.conversation)
+    view.state.draft = '未提交的追问'
+    await view.generateSummary(); await view.generateSummary()
+    assert.equal(submitted.length, 2)
+    assert.equal(submitted[0].client_request_id, submitted[1].client_request_id)
+    assert.equal(view.state.draft, '未提交的追问')
+    completed = true
+    globalThis.fetch = (url, options) => url.endsWith('/summary') ? Promise.resolve(response(info())) : defaultFetch(url, options)
+    await view.refreshSummary()
+    assert.equal(view.state.summary.content, '本次总结')
+    assert.equal(view.state.summaryLoading, false)
+  } finally { view.effect.stop() }
+})
+
+test('a late summary response cannot replace a different conversation summary', async () => {
+  globalThis.fetch = defaultFetch
+  const view = scope('one', 'summary-switch')
+  try {
+    await until(() => !view.state.loading && view.state.conversation)
+    let finishOld
+    globalThis.fetch = (url) => {
+      if (url.endsWith('/one/summary')) return new Promise(resolve => { finishOld = resolve })
+      if (url.endsWith('/two/summary')) return Promise.resolve(response({ status: 'completed', content: '新会话总结' }))
+      return defaultFetch(url)
+    }
+    const old = view.refreshSummary()
+    view.selected.value = 'two'
+    await vue.nextTick()
+    await until(() => view.state.summary?.content === '新会话总结')
+    finishOld(response({ status: 'completed', content: '旧会话私有内容' }))
+    await old
+    assert.equal(view.state.summary.content, '新会话总结')
+    assert.equal(view.state.summaryLoading, false)
+  } finally { view.effect.stop() }
+})
+
+test('a restored summary acknowledges a lost POST response before starting another summary', async () => {
+  const submitted = []
+  let saved = null
+  globalThis.fetch = (url, options) => {
+    if (url.endsWith('/summary') && options.method === 'POST') {
+      const value = JSON.parse(options.body); submitted.push(value)
+      saved = { status: 'completed', content: '已保存在服务器的总结', client_request_id: value.client_request_id }
+      if (submitted.length === 1) return Promise.reject(new Error('response lost'))
+      return Promise.resolve(response(saved))
+    }
+    if (url.endsWith('/summary') && saved) return Promise.resolve(response(saved))
+    return defaultFetch(url)
+  }
+  const view = scope('one', 'summary-restored')
+  try {
+    await until(() => !view.state.loading && view.state.conversation)
+    await view.generateSummary()
+    await view.refreshSummary()
+    assert.equal(view.state.summary.content, '已保存在服务器的总结')
+    await view.generateSummary()
+    assert.equal(submitted.length, 2)
+    assert.notEqual(submitted[0].client_request_id, submitted[1].client_request_id)
   } finally { view.effect.stop() }
 })

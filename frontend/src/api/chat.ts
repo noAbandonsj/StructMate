@@ -19,6 +19,20 @@ export interface Message {
 }
 export interface Page<T> { items: T[]; total: number; page: number; page_size: number }
 export interface Config { generation_available: boolean; embedding_available: boolean }
+export interface Summary {
+  client_request_id?: string | null
+  status: 'empty' | 'generating' | 'completed' | 'failed'; content: string
+  generated_at: string | null; cutoff_sequence: number; cutoff_at: string | null
+  message_count: number; has_newer_messages: boolean; error_code: string | null; error_message: string | null
+}
+export const summary = (id: string, signal: AbortSignal) =>
+  request<Summary>('/conversations/' + encodeURIComponent(id) + '/summary', { signal })
+export const generateSummary = (csrf: string, id: string, key: string, signal: AbortSignal) =>
+  request<Summary>('/conversations/' + encodeURIComponent(id) + '/summary', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+    body: JSON.stringify({ client_request_id: key }), signal,
+  })
+export const summaryExportUrl = (id: string) => '/api/v1/conversations/' + encodeURIComponent(id) + '/summary/export'
 export interface Queued { assistant_message_id: string; user_message_id: string; stream_url: string }
 const json = (csrf: string, value: unknown, method = 'POST') => ({
   method, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(value),

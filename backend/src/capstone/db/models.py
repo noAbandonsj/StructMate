@@ -240,6 +240,7 @@ class Conversation(Base):
         ForeignKey("knowledge_points.id", ondelete="RESTRICT")
     )
     archived: Mapped[bool] = mapped_column(default=False)
+    summary_data: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
 

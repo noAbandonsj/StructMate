@@ -10,6 +10,7 @@ export function useChat(selected: Ref<string>) {
     conversation: null as api.Conversation | null, messages: [] as api.Message[],
     config: null as api.Config | null, loading: false, busy: false, error: '', streamError: '',
     draft: '', intent: 'explain' as api.Intent, historyPage: 1,
+    summary: null as api.Summary | null, summaryError: '', summaryLoading: false,
   })
   let epoch = 0, readVersion = 0, disposed = false
   let reader = new AbortController(), writer = new AbortController()
@@ -17,6 +18,9 @@ export function useChat(selected: Ref<string>) {
   let streamVersion = 0
   let pending: { content: string; intent: api.Intent; key: string } | null = null
   let restoringDraft = false
+  let summaryVersion = 0, summaryReader = new AbortController()
+  let summaryTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingSummaryKey: string | null = null
   const retryKeys = new Map<string, string>()
   const active = computed(() => state.messages.find(message => message.status === 'generating'))
   const valid = (version: number, user: string | undefined, id: string) =>
@@ -52,21 +56,57 @@ export function useChat(selected: Ref<string>) {
   async function reload() {
     const version = epoch, user = authState.account?.user.id, id = selected.value
     const readStamp = ++readVersion
+    const summaryStamp = ++summaryVersion
+    summaryReader.abort(); stopSummaryTimer(); state.summaryLoading = false
     const current = () => valid(version, user, id) && readStamp === readVersion
     reader.abort(); reader = new AbortController()
     const signal = reader.signal
     state.loading = true; state.error = ''
     try {
-      const [conversations, config, conversation] = await Promise.all([
+      const [conversations, config, conversation, summary] = await Promise.all([
         api.list(state.page, state.archived, signal), api.config(signal),
         id ? api.detail(id, signal) : Promise.resolve(null),
+        id ? api.summary(id, signal) : Promise.resolve(null),
       ])
       if (!current()) return
       state.conversations = conversations.items; state.total = conversations.total
       state.config = config; state.conversation = conversation
+      if (summaryStamp === summaryVersion) acceptSummary(summary)
       if (id) await loadHistory(signal, version, user, id, readStamp)
     } catch (error) { if (current() && !signal.aborted) await failure(error) }
     finally { if (current()) state.loading = false }
+  }
+  function stopSummaryTimer() { if (summaryTimer) clearTimeout(summaryTimer); summaryTimer = null }
+  function acceptSummary(summary: api.Summary | null) {
+    if (pendingSummaryKey && summary?.client_request_id === pendingSummaryKey) pendingSummaryKey = null
+    state.summary = summary; state.summaryError = ''
+    stopSummaryTimer()
+    if (summary?.status === 'generating') summaryTimer = setTimeout(() => void refreshSummary(), 1500)
+  }
+  async function refreshSummary() {
+    const version = epoch, user = authState.account?.user.id, id = selected.value, stamp = ++summaryVersion
+    if (!user || !id || disposed) return
+    summaryReader.abort(); summaryReader = new AbortController(); stopSummaryTimer()
+    const signal = summaryReader.signal
+    state.summaryLoading = true; state.summaryError = ''
+    try {
+      const summary = await api.summary(id, signal)
+      if (valid(version, user, id) && stamp === summaryVersion) acceptSummary(summary)
+    } catch (error) {
+      if (valid(version, user, id) && stamp === summaryVersion && !signal.aborted) {
+        if (error instanceof ApiError && error.status === 401) await restoreAccount(true)
+        else state.summaryError = error instanceof Error ? error.message : '总结读取失败，请刷新。'
+      }
+    } finally { if (valid(version, user, id) && stamp === summaryVersion) state.summaryLoading = false }
+  }
+  async function generateSummary() {
+    if (!selected.value || state.summary?.status === 'generating') return
+    const version = epoch, user = authState.account?.user.id, id = selected.value
+    summaryVersion++; summaryReader.abort(); stopSummaryTimer(); state.summaryLoading = false
+    pendingSummaryKey ??= crypto.randomUUID()
+    const key = pendingSummaryKey
+    const result = await mutate((csrf, signal) => api.generateSummary(csrf, id, key, signal))
+    if (result && valid(version, user, id)) { pendingSummaryKey = null; acceptSummary(result) }
   }
   async function mutate<T>(action: (csrf: string, signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
     const account = authState.account, version = epoch, id = selected.value
@@ -132,6 +172,8 @@ export function useChat(selected: Ref<string>) {
   }
   function reset() {
     restoringDraft = true
+    summaryVersion++; summaryReader.abort(); stopSummaryTimer(); pendingSummaryKey = null
+    state.summary = null; state.summaryError = ''; state.summaryLoading = false
     streamVersion++
     epoch++; readVersion++; reader.abort(); writer.abort(); closeStream?.(); closeStream = null
     state.conversations = []; state.messages = []; state.conversation = state.config = null
@@ -150,5 +192,5 @@ export function useChat(selected: Ref<string>) {
     if (user && !restoringDraft) saveDraft(user, selected.value, value)
   }, { flush: 'sync' })
   onScopeDispose(() => { disposed = true; reset() })
-  return { state, active, reload, create, send, retry, cancel, update, older, reconnect: () => { if (active.value) follow(active.value.id) } }
+  return { state, active, reload, create, send, retry, cancel, update, older, refreshSummary, generateSummary, reconnect: () => { if (active.value) follow(active.value.id) } }
 }
