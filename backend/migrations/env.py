@@ -15,7 +15,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
-settings = Settings()
+settings = config.attributes.get("settings") or Settings()
 
 
 def render_migration_item(kind: str, value: object, _context: AutogenContext) -> str | bool:
