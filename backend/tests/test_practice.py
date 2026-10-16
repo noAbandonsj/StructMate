@@ -385,6 +385,79 @@ def test_populated_practice_migration_down_and_up(bank_database, migration_confi
     command.check(migration_config)
 
 
+@pytest.mark.parametrize("review_fails", [False, True])
+def test_ai_drafts_are_not_published_until_review_succeeds(bank_database, tmp_path, review_fails):
+    with Session(bank_database) as session:
+        point = str(
+            session.scalar(
+                select(KnowledgePoint.id).where(KnowledgePoint.code == "stack-queue.stack")
+            )
+        )
+
+    class ReviewedGeneration:
+        available = True
+        calls = 0
+
+        def stream(self, messages, cancelled):
+            self.calls += 1
+            with Session(bank_database) as session:
+                assert (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(Question)
+                        .where(Question.source_type == "ai")
+                    )
+                    == 0
+                )
+            if self.calls == 2:
+                assert "独立复核草稿" in messages[0]["content"]
+                assert "待复核草稿" in messages[1]["content"]
+                if review_fails:
+                    yield '{"items":[]}'
+                    return
+            yield json.dumps(
+                {
+                    "items": [
+                        {
+                            "type": "single_choice",
+                            "stem": "空栈依次 push(1)、push(2)、pop()，弹出什么？",
+                            "options": [{"key": "A", "text": "1"}, {"key": "B", "text": "2"}],
+                            "answer": "A" if self.calls == 1 else "B",
+                            "explanation": "后进先出，2 最后入栈，因此弹出 2。",
+                            "knowledge_point_id": point,
+                            "difficulty": "basic",
+                            "citation_numbers": [],
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+
+    generation = ReviewedGeneration()
+    settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
+    with TestClient(create_app(settings, generation_service=generation)) as client:
+        _, headers = register(client)
+        practice = create(
+            client, headers, question_source="ai", count=1, knowledge_point_ids=[point]
+        )
+        wait_practice(client, practice["id"], "failed" if review_fails else "ready")
+        assert generation.calls == 2
+        if review_fails:
+            assert items(client, practice["id"]) == []
+            with Session(bank_database) as session:
+                assert (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(Question)
+                        .where(Question.source_type == "ai")
+                    )
+                    == 0
+                )
+        else:
+            item = items(client, practice["id"])[0]
+            assert submit(client, headers, item, "B").json()["is_correct"]
+
+
 def test_ai_history_marks_deleted_document_sources(bank_database, tmp_path):
     with Session(bank_database) as session:
         point = str(
@@ -505,7 +578,7 @@ def test_conversation_context_is_carried_to_ai_practice_and_checked_for_owner(
         )
         wait_practice(client, practice["id"])
         assert practice["source_conversation_id"] == conversation
-        assert len(contexts) == 1 and "逻辑关系与存储布局" in contexts[0]
+        assert len(contexts) == 2 and all("逻辑关系与存储布局" in value for value in contexts)
         other = TestClient(client.app)
         try:
             _, other_headers = register(other, "outsider")

@@ -160,7 +160,7 @@ def test_production_http_adapters_drive_documents_chat_ai_summary_report(
         saved = report(client, headers).json()
         finished = wait_report(client, saved["id"])
         assert finished["snapshot"]["attempts"]["count"] == 1 and finished["content"]
-        assert state["generation"] == 4 and state["embedding"] >= 3
+        assert state["generation"] == 5 and state["embedding"] >= 3
 
 
 def test_cancellation_interrupts_a_stalled_http_stream(local_provider):
