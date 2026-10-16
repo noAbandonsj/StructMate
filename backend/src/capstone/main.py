@@ -17,11 +17,11 @@ from capstone.api.recommendations import router as recommendations_router
 from capstone.api.reports import router as reports_router
 from capstone.api.summaries import router as summaries_router
 from capstone.core.errors import install_error_handlers
+from capstone.core.model_http import embedding_service as configured_embedding
+from capstone.core.model_http import generation_service as configured_generation
 from capstone.core.model_ports import (
     EmbeddingService,
     GenerationService,
-    UnconfiguredEmbedding,
-    UnconfiguredGeneration,
 )
 from capstone.core.settings import Settings
 from capstone.core.upload_limits import UploadBodyLimit
@@ -64,10 +64,10 @@ def create_app(
             app.state.vector_client = vector_client
             app.state.blob_store = BlobStore(configuration.uploads_dir)
             app.state.vector_index = VectorIndex(vector_client, configuration.data_dir)
-            app.state.embedding_service = embedding_service or UnconfiguredEmbedding(
+            app.state.embedding_service = embedding_service or configured_embedding(
                 configuration.connection("embedding")
             )
-            app.state.generation_service = generation_service or UnconfiguredGeneration(
+            app.state.generation_service = generation_service or configured_generation(
                 configuration.connection("generation")
             )
             if inspect(engine).has_table("messages"):

@@ -92,6 +92,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
+    { name = "httpx2" },
     { name = "pwdlib", extra = ["argon2"] },
     { name = "pydantic-settings" },
     { name = "pypdf" },
@@ -104,7 +105,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx2" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -113,6 +113,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "httpx2", specifier = ">=2.0,<3" },
     { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3,<1" },
     { name = "pydantic-settings", specifier = ">=2.7,<3" },
     { name = "pypdf", specifier = ">=6.20,<7" },
@@ -125,7 +126,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx2", specifier = ">=2.0,<3" },
     { name = "pytest", specifier = ">=8.3,<10" },
     { name = "ruff", specifier = ">=0.11,<1" },
 ]

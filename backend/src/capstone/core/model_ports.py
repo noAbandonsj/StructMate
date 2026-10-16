@@ -53,7 +53,7 @@ class UnconfiguredEmbedding:
         raise ApiError(
             503,
             "EMBEDDING_NOT_CONFIGURED",
-            "向量连接参数已配置，调用协议适配尚未接通；文件已保留。"
+            "向量连接参数已配置，但 API 密钥为空；填写后重启后端可重试。"
             if self.connection
             else "向量模型尚未接通，文件已保留；配置服务后可重试。",
         )
@@ -75,7 +75,7 @@ class UnconfiguredGeneration:
         raise ApiError(
             503,
             "GENERATION_NOT_CONFIGURED",
-            "生成连接参数已配置，调用协议适配尚未接通。"
+            "生成连接参数已配置，但 API 密钥为空；填写后重启后端可重试。"
             if self.connection
             else "生成模型尚未接通，请配置后重试。",
         )

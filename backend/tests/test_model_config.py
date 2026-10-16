@@ -92,7 +92,9 @@ def test_invalid_connections_fail_before_startup_without_key_in_diagnostics(chan
     assert "private-test-key" not in str(error.value)
 
 
-def test_parameters_do_not_claim_adapter_success_or_leak_to_api(migrated_database, tmp_path):
+def test_complete_parameters_configure_http_adapters_without_leaking_to_api(
+    migrated_database, tmp_path
+):
     settings = Settings(
         _env_file=None,
         environment="test",
@@ -108,8 +110,8 @@ def test_parameters_do_not_claim_adapter_success_or_leak_to_api(migrated_databas
         register(client)
         assert client.app.state.generation_service.connection.model == "private-text-name"
         assert client.app.state.embedding_service.connection.model == "private-vector-name"
-        assert not client.app.state.generation_service.available
-        assert not client.app.state.embedding_service.available
+        assert client.app.state.generation_service.available
+        assert client.app.state.embedding_service.available
         public = [
             client.get(path).json()
             for path in (
@@ -118,7 +120,7 @@ def test_parameters_do_not_claim_adapter_success_or_leak_to_api(migrated_databas
                 "/api/v1/documents/upload-config",
             )
         ]
-        assert public[1]["generation_available"] is False
+        assert public[1]["generation_available"] is True
         payload = json.dumps(public)
         assert all(
             value not in payload
@@ -131,13 +133,20 @@ def test_parameters_do_not_claim_adapter_success_or_leak_to_api(migrated_databas
                 "private-embedding-test-key",
             )
         )
+    without_keys = settings.model_copy(
+        update={"generation_api_key": None, "embedding_api_key": None}
+    )
+    with TestClient(create_app(without_keys)) as client:
+        register(client, "without_keys")
+        assert not client.app.state.generation_service.available
+        assert not client.app.state.embedding_service.available
         for action in (
             lambda: client.app.state.embedding_service.embed(["真实文本"]),
             lambda: client.app.state.generation_service.stream([], Event()),
         ):
             with pytest.raises(ApiError) as error:
                 action()
-            assert "协议适配尚未接通" in error.value.detail["message"]
+            assert "API 密钥为空" in error.value.detail["message"]
             assert "private-" not in str(error.value.detail)
 
 

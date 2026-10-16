@@ -188,7 +188,8 @@ def run_evaluation(
                 or not app.state.generation_service.available
             ):
                 raise EvaluationUnavailable(
-                    "生成或 Embedding 调用适配尚未接通；评估未执行，不生成实测结果。"
+                    "生成或 Embedding 服务配置不完整，请填写地址、模型和密钥；"
+                    "评估未执行，不生成实测结果。"
                 )
             seed_course_data(app.state.engine)
             import_course_data(app.state.engine, runtime_settings)
