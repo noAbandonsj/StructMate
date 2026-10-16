@@ -276,3 +276,58 @@ def test_endpoint_accepts_api_roots_or_complete_endpoint_without_duplicates():
         endpoint("https://host.test/compatible-mode/v1/embeddings?version=1", "embeddings")
         == "https://host.test/compatible-mode/v1/embeddings?version=1"
     )
+
+
+def test_flash_ambiguous_zero_indices_are_discarded_and_single_requests_restore_mapping():
+    calls = []
+
+    def handle(request):
+        inputs = json.loads(request.content)["input"]
+        calls.append(inputs)
+        # The batch order is intentionally untrustworthy and must never be used.
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"index": 0, "embedding": [float(text), 1.0]} for text in reversed(inputs)]
+            },
+        )
+
+    model = QwenEmbedding(
+        connection().model_copy(update={"model": "qwen3.7-text-embedding-flash"}),
+        transport=httpx.MockTransport(handle),
+    )
+    result = model.embed(["1", "2", "3"])
+    assert calls == [["1", "2", "3"], ["1"], ["2"], ["3"]]
+    assert result.vectors == [[1.0, 1.0], [2.0, 1.0], [3.0, 1.0]]
+
+
+def test_flash_single_fallback_failure_never_returns_partial_vectors():
+    calls = []
+
+    def handle(request):
+        inputs = json.loads(request.content)["input"]
+        calls.append(inputs)
+        if inputs == ["2"]:
+            return httpx.Response(429)
+        return httpx.Response(
+            200, json={"data": [{"index": 0, "embedding": [1.0, 2.0]} for _ in inputs]}
+        )
+
+    with pytest.raises(ApiError, match="RATE_LIMITED"):
+        QwenEmbedding(
+            connection().model_copy(update={"model": "qwen3.7-text-embedding-flash"}),
+            transport=httpx.MockTransport(handle),
+        ).embed(["1", "2"])
+    assert calls == [["1", "2"], ["1"], ["2"]]
+
+
+def test_other_models_duplicate_indices_still_fail_without_fallback():
+    calls = []
+
+    def handle(request):
+        calls.append(request)
+        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [1.0, 2.0]}] * 2})
+
+    with pytest.raises(ApiError, match="EMBEDDING_INVALID"):
+        QwenEmbedding(connection(), transport=httpx.MockTransport(handle)).embed(["1", "2"])
+    assert len(calls) == 1

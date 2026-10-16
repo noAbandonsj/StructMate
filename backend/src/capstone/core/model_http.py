@@ -2,6 +2,7 @@
 
 import json
 import time
+from collections import deque
 from contextlib import contextmanager
 from hashlib import sha256
 from threading import Event, Thread
@@ -204,9 +205,10 @@ class QwenEmbedding:
         try:
             vectors, dimension = [], None
             url = endpoint(self.connection.base_url, "embeddings")
-            # Qwen v4 accepts at most ten texts per request; caller batches can be larger.
-            for start in range(0, len(texts), 10):
-                inputs = texts[start : start + 10]
+            # Keep batches within v4's ten-text limit, also valid for Qwen 3.7 Flash.
+            batches = deque(texts[start : start + 10] for start in range(0, len(texts), 10))
+            while batches:
+                inputs = batches.popleft()
                 payload = {
                     "model": self.connection.model,
                     "input": inputs,
@@ -230,6 +232,20 @@ class QwenEmbedding:
                 )
                 if not isinstance(rows, list) or len(rows) != len(inputs):
                     raise ValueError("Invalid embedding rows")
+                if (
+                    self.connection.model == "qwen3.7-text-embedding-flash"
+                    and len(inputs) > 1
+                    and all(
+                        isinstance(row, dict)
+                        and type(row.get("index")) is int
+                        and row["index"] == 0
+                        for row in rows
+                    )
+                ):
+                    # Observed Flash gateway behavior: every batch index is zero.
+                    # Discard ambiguous vectors; single-input requests establish the mapping.
+                    batches.extendleft([text] for text in reversed(inputs))
+                    continue
                 indexed = {}
                 for row in rows:
                     if not isinstance(row, dict):
