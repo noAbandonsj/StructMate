@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useWrong } from '../state/wrong'
+import MarkdownContent from '../components/MarkdownContent'
 const route = useRoute(), router = useRouter()
 const selected = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const { state, reload, review } = useWrong(selected)
@@ -16,7 +17,7 @@ function safeLink(value: string) { try { return ['https:', 'http:'].includes(new
     <div class="wrong-filters"><label>复习状态<select v-model="state.status" @change="state.page = 1; reload()"><option value="pending">待复习</option><option value="consolidated">已巩固</option><option value="">全部</option></select></label><label>知识点<select v-model="state.point" @change="state.page = 1; reload()"><option value="">全部知识点</option><option v-for="point in state.points" :key="point.id" :value="point.id">{{ point.name }}</option></select></label><button class="primary-button" :disabled="state.busy || !state.checked.length" @click="start(state.checked)">复习所选（{{ state.checked.length }}）</button></div>
     <div class="wrong-layout">
       <div>
-        <p v-if="state.loading && !state.items.length">正在读取错题…</p><p v-else-if="!state.items.length" class="notice">当前筛选没有错题，可以去练习中心开始一组练习。</p>
+        <p v-if="state.loading && !state.items.length">正在读取错题…</p><p v-else-if="state.error && !state.items.length" class="notice">暂时无法读取错题，请刷新重试。</p><p v-else-if="!state.items.length" class="notice">当前筛选没有错题，可以去练习中心开始一组练习。</p>
         <article v-for="item in state.items" :key="item.id" class="wrong-card">
           <label><input type="checkbox" :value="item.id" v-model="state.checked">选择复习</label><RouterLink :to="'/wrong/' + item.id"><h2>{{ item.stem }}</h2></RouterLink>
           <p class="field-help">{{ item.source_type === 'ai' ? 'AI 题 · 参考答案' : '核验题库' }} · {{ item.status === 'consolidated' ? '该题已巩固' : '待复习' }} · {{ item.error_count }} 次错误 / {{ item.attempt_count }} 次作答</p>
@@ -28,7 +29,7 @@ function safeLink(value: string) { try { return ['https:', 'http:'].includes(new
         <h2>原题与历次作答</h2><strong>{{ state.detail.stem }}</strong>
         <p v-if="!state.detail.is_valid" class="notice">此题已停用并排除统计：{{ state.detail.disabled_reason }}</p>
         <ul><li v-for="option in state.detail.question?.options" :key="option.key">{{ option.text }}</li></ul>
-        <p>{{ state.detail.source_type === 'ai' ? '参考答案' : '核验答案' }}：{{ state.detail.question?.options.find(option => option.key === state.detail!.question?.answer)?.text }}</p><p>{{ state.detail.question?.explanation }}</p>
+        <p>{{ state.detail.source_type === 'ai' ? '参考答案' : '核验答案' }}：{{ state.detail.question?.options.find(option => option.key === state.detail!.question?.answer)?.text }}</p><MarkdownContent v-if="state.detail.question" :content="state.detail.question.explanation" />
         <button :disabled="state.busy || !state.detail.is_valid" @click="start([state.detail.id])">开始原题复习</button>
         <details><summary>原题依据与来源</summary>
           <p v-for="source in state.detail.question?.source_info.sources" :key="source.url"><a :href="safeLink(source.url)" target="_blank" rel="noopener noreferrer">{{ source.title }}</a> · {{ source.author }} · {{ source.license }}</p>

@@ -14,7 +14,7 @@ export function usePractice(selected: Ref<string>) {
     form: defaults(), history: [] as api.Practice[], total: 0, page: 1,
     practice: null as api.Practice | null, items: [] as api.Item[], choices: {} as Record<string, string>,
     points: [] as KnowledgePoint[], analysis: null as api.Performance | null,
-    generationAvailable: false, loading: false, busy: false, error: '', readError: '',
+    generationAvailable: false, ready: false, loading: false, busy: false, error: '', readError: '',
   })
   let epoch = 0, readVersion = 0, disposed = false, restoring = false
   let reader = new AbortController(), writer = new AbortController()
@@ -56,6 +56,7 @@ export function usePractice(selected: Ref<string>) {
       state.history = history.items; state.total = history.total; state.points = points
       state.generationAvailable = config.generation_available; state.analysis = analysis
       state.practice = practice; state.items = items?.items ?? []
+      state.ready = true
       for (const item of state.items) {
         if (item.attempt || !item.is_valid || !item.options.some(option => option.key === state.choices[item.id])) delete state.choices[item.id]
       }
@@ -113,7 +114,7 @@ export function usePractice(selected: Ref<string>) {
   function restore() {
     restoring = true
     epoch++; readVersion++; reader.abort(); writer.abort(); stopTimer()
-    state.form = defaults(); state.practice = null; state.items = []; state.history = []; state.choices = {}
+    state.form = defaults(); state.practice = null; state.items = []; state.history = []; state.choices = {}; state.ready = false
     state.error = state.readError = ''; state.total = 0; state.page = 1; state.busy = state.loading = false; state.points = []; state.analysis = null; state.generationAvailable = false
     pendingCreate = null; answerKeys.clear()
     const user = authState.account?.user.id

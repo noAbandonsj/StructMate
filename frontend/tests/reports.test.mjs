@@ -69,6 +69,17 @@ test('live statistic refresh never rewrites the selected historical snapshot or 
     assert.equal(view.state.range.from_date, '2026-01-01')
   } finally { view.effect.stop() }
 })
+
+test('an omitted date boundary is filled with the effective server range after refresh', async () => {
+  globalThis.fetch = defaults
+  const view = scope('partial-date-owner')
+  try {
+    await until(() => view.state.stats)
+    view.state.range = { from_date: '', to_date: '2026-10-15' }
+    await view.reload()
+    assert.deepEqual(view.state.range, { from_date: '2026-10-09', to_date: '2026-10-15' })
+  } finally { view.effect.stop() }
+})
 test('switching reports and accounts rejects old responses and clears private results', async () => {
   let release
   globalThis.fetch = url => url.endsWith('/reports/old') ? new Promise(resolve => { release = resolve }) : defaults(url)

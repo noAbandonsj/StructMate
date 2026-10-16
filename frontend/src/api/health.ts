@@ -6,6 +6,7 @@ export interface HealthResponse {
 
 export async function getHealth(): Promise<HealthResponse> {
   const response = await fetch('/api/v1/health', {
+    cache: 'no-store',
     signal: AbortSignal.timeout(5000),
   })
   if (!response.ok) {

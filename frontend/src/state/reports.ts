@@ -42,8 +42,8 @@ export function useReports(selected: Ref<string>) {
       if (!current()) return
       state.stats = stats; state.reports = reports.items; state.total = reports.total
       state.report = report; state.generationAvailable = configuration.generation_available
-      if (signature() === rangeSignature && !state.range.from_date && !state.range.to_date) {
-        state.range = { from_date: stats.from_date, to_date: stats.to_date }
+      if (signature() === rangeSignature) {
+        state.range = { from_date: state.range.from_date || stats.from_date, to_date: state.range.to_date || stats.to_date }
       }
       if (report && pending?.key === report.client_request_id) { pending = null; persist() }
       if (report?.status === 'generating') timer = setTimeout(() => void reload(), 1500)

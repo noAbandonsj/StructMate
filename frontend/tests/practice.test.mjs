@@ -156,3 +156,20 @@ test('finishing generation cannot leave ready metadata paired with an earlier em
     assert.equal(view.state.items[0].id, 'published-question')
   } finally { view.effect.stop() }
 })
+
+test('failed refresh keeps existing practice data and exposes the read failure separately', async () => {
+  globalThis.fetch = defaults
+  const view = scope('refresh-failure-owner')
+  try {
+    await until(() => view.state.ready)
+    globalThis.fetch = async () => { throw new Error('offline') }
+    await view.reload()
+    assert.ok(view.state.readError)
+    assert.equal(view.state.history.length, 1)
+    assert.equal(view.state.items[0].id, 'question')
+    assert.equal(view.state.practice.id, 'one')
+    globalThis.fetch = defaults
+    await view.reload()
+    assert.equal(view.state.readError, '')
+  } finally { view.effect.stop() }
+})

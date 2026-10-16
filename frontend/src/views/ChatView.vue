@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useChat } from '../state/chat'
 import SummaryPanel from '../components/SummaryPanel.vue'
 import RecommendationPanel from '../components/RecommendationPanel.vue'
+import MarkdownContent from '../components/MarkdownContent'
 import type { Citation, Scope } from '../api/chat'
 import { documentFileUrl, getDocument } from '../api/documents'
 
@@ -14,6 +15,8 @@ const newScope = ref<Scope>('combined')
 const title = ref('')
 const citation = ref<Citation | null>(null)
 const citationError = ref('')
+const citationPane = ref<HTMLElement | null>(null)
+let citationTrigger: HTMLElement | null = null
 let citationVersion = 0
 watch(selected, () => { citationVersion++; citation.value = null; citationError.value = '' })
 watch(() => state.conversation?.title, value => { title.value = value ?? '' })
@@ -27,17 +30,18 @@ async function start() {
 }
 async function showCitation(value: Citation) {
   const version = ++citationVersion
+  if (!citation.value) citationTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
   citation.value = value; citationError.value = ''
+  await nextTick()
+  if (version !== citationVersion) return
+  citationPane.value?.focus({ preventScroll: true })
   try {
     const document = await getDocument(value.document_id, new AbortController().signal)
     if (version === citationVersion) citation.value = { ...value, source_deleted: document.status === 'deleted' }
   } catch { if (version === citationVersion) citationError.value = '无法核对来源状态，请重试。' }
 }
-function pieces(content: string) { return content.split(/(\[资料\d+\])/).filter(Boolean) }
-function referenced(piece: string, citations: Citation[]) {
-  const match = /^\[资料(\d+)\]$/.exec(piece)
-  return match ? citations.find(value => value.number === Number(match[1])) : undefined
-}
+function closeCitation() { citation.value = null; citationVersion++; citationTrigger?.focus({ preventScroll: true }) }
+function openCitation(number: number, citations: Citation[]) { const value = citations.find(item => item.number === number); if (value) void showCitation(value) }
 </script>
 <template>
   <section class="chat-page">
@@ -54,7 +58,7 @@ function referenced(piece: string, citations: Citation[]) {
         </form>
         <label class="archive-toggle"><input type="checkbox" v-model="state.archived" @change="state.page = 1; reload()">显示已归档</label>
         <p v-if="state.loading && !state.conversations.length">正在读取会话…</p>
-        <p v-else-if="!state.conversations.length" class="field-help">还没有{{ state.archived ? '归档' : '' }}会话。</p>
+        <p v-else-if="!state.conversations.length && !state.error" class="field-help">还没有{{ state.archived ? '归档' : '' }}会话。</p>
         <RouterLink v-for="conversation in state.conversations" :key="conversation.id" :to="'/chat/' + conversation.id" class="conversation-link" :class="{ selected: selected === conversation.id }">{{ conversation.title }}</RouterLink>
         <div class="document-pagination" v-if="state.total > 20">
           <button :disabled="state.page <= 1 || state.loading" @click="state.page--; reload()">上一页</button>
@@ -78,7 +82,8 @@ function referenced(piece: string, citations: Citation[]) {
             <p v-if="!state.messages.length" class="field-help">可以问：“栈和队列有什么区别？”或“用例子解释二叉树遍历”。</p>
             <article v-for="(message, index) in state.messages" :key="message.id" class="chat-message" :class="message.role">
               <strong>{{ message.role === 'user' ? '我' : '学习助手' }}</strong>
-              <div class="message-content"><template v-for="(piece, i) in pieces(message.content)" :key="i"><button v-if="referenced(piece, message.citations)" class="inline-citation" @click="showCitation(referenced(piece, message.citations)!)">{{ piece }}</button><span v-else>{{ piece }}</span></template></div>
+              <MarkdownContent v-if="message.role === 'assistant'" :content="message.content" :citations="message.citations.map(value => value.number)" @citation="openCitation($event, message.citations)" />
+              <div v-else class="message-content">{{ message.content }}</div>
               <p v-if="message.status === 'generating'" class="field-help">正在检索和生成回答…</p>
               <p v-if="message.status === 'failed'" class="form-error" role="alert">{{ message.error_message }}</p>
               <p v-if="message.status === 'cancelled'" class="field-help">回答已取消，已生成内容保留。</p>
@@ -101,8 +106,8 @@ function referenced(piece: string, citations: Citation[]) {
           <details class="chat-recommendations"><summary>阅读相关资料</summary><RecommendationPanel :point-id="practicePoint || undefined" /></details>
         </template>
       </div>
-      <aside v-if="citation" class="citation-pane" aria-label="引用原文">
-        <div class="section-heading"><h2>引用原文</h2><button @click="citation = null; citationVersion++">关闭</button></div>
+      <aside v-if="citation" ref="citationPane" class="citation-pane" aria-label="引用原文" tabindex="-1" @keydown.esc="closeCitation">
+        <div class="section-heading"><h2>引用原文</h2><button @click="closeCitation">关闭</button></div>
         <strong>{{ citation.filename }}</strong>
         <p class="field-help">{{ citation.heading }}{{ citation.page_number ? ' · 第 ' + citation.page_number + ' 页' : '' }}{{ citation.line_start ? ' · 第 ' + citation.line_start + '–' + citation.line_end + ' 行' : '' }}</p>
         <p v-if="citation.source_deleted" class="notice">来源已删除，以下是本次回答保留的历史片段。</p>

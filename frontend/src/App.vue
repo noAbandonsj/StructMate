@@ -1,32 +1,39 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
-import { getHealth } from './api/health'
+import { serviceState, checkService, markServiceUnavailable } from './state/connection'
 import AccountMenu from './components/AccountMenu.vue'
 import { navigation, safeReturnPath } from './navigation'
 import { authState, restoreAccount } from './state/auth'
 
 const route = useRoute()
 const router = useRouter()
-const connection = ref<'checking' | 'connected' | 'disconnected'>('checking')
+const connection = computed(() => serviceState.status)
 const connectionLabel = computed(() => ({
   checking: '正在连接服务',
-  connected: '服务已连接',
-  disconnected: '服务未连接',
+  connected: '后端服务正常',
+  disconnected: '服务连接异常',
 })[connection.value])
 
-async function checkConnection() {
-  connection.value = 'checking'
-  try {
-    await getHealth()
-    connection.value = 'connected'
-  } catch {
-    connection.value = 'disconnected'
-  }
-}
-
-onMounted(checkConnection)
+const checkConnection = () => { if (!document.hidden) void checkService() }
+let connectionTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  checkConnection()
+  connectionTimer = setInterval(checkConnection, 30000)
+  window.addEventListener('focus', checkConnection)
+  window.addEventListener('online', checkConnection)
+  window.addEventListener('offline', markServiceUnavailable)
+  document.addEventListener('visibilitychange', checkConnection)
+})
+onUnmounted(() => {
+  clearInterval(connectionTimer)
+  window.removeEventListener('focus', checkConnection)
+  window.removeEventListener('online', checkConnection)
+  window.removeEventListener('offline', markServiceUnavailable)
+  document.removeEventListener('visibilitychange', checkConnection)
+})
+const inSection = (path: string) => route.path === path || (path !== '/' && route.path.startsWith(path + '/'))
 
 watch(() => authState.account, (account) => {
   if (!account && authState.status === 'ready' && route.meta.requiresAuth) {
@@ -71,8 +78,8 @@ async function retryAccount() {
           :key="page.path"
           :to="page.path"
           class="nav-item"
-          :class="{ active: route.path === page.path }"
-          :aria-current="route.path === page.path ? 'page' : undefined"
+          :class="{ active: inSection(page.path) }"
+          :aria-current="inSection(page.path) ? 'page' : undefined"
         >
           <span class="nav-index">{{ String(index + 1).padStart(2, '0') }}</span>
           {{ page.title }}

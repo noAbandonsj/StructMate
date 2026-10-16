@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Summary } from '../api/chat'
 import { summaryExportUrl } from '../api/chat'
+import MarkdownContent from './MarkdownContent'
 defineProps<{ id: string; summary: Summary | null; canGenerate: boolean; busy: boolean; loading: boolean; error: string }>()
 const emit = defineEmits<{ generate: []; refresh: [] }>()
 function time(value: string | null) { return value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '尚未生成' }
@@ -14,7 +15,7 @@ function time(value: string | null) { return value ? new Date(value).toLocaleStr
     <p v-if="error || summary?.error_message" class="form-error" role="alert">{{ error || summary?.error_message }}</p>
     <template v-if="summary?.content">
       <p class="field-help">{{ summary.status === 'completed' ? '已完成总结' : '上一次成功总结' }} · 覆盖 {{ summary.message_count / 2 }} 轮完整问答 · 消息截止 {{ time(summary.cutoff_at) }} · 生成于 {{ time(summary.generated_at) }}</p>
-      <div class="summary-content">{{ summary.content }}</div>
+      <MarkdownContent :content="summary.content" />
       <a :href="summaryExportUrl(id)">导出 Markdown</a>
       <p v-if="summary.has_newer_messages && summary.status !== 'generating'" class="field-help">还有新回答未包含在这份总结中，可以重新总结。</p>
     </template>

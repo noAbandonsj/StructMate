@@ -1,3 +1,5 @@
+import { markServiceUnavailable } from '../state/connection'
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -20,6 +22,7 @@ export async function request<T>(path: string, options: RequestInit = {}, timeou
         : AbortSignal.timeout(timeoutMs),
     })
     if (!response.ok) {
+      if (response.status >= 500) markServiceUnavailable()
       const error = await response.json().catch(() => null) as {
         code?: string
         message?: string
@@ -34,6 +37,7 @@ export async function request<T>(path: string, options: RequestInit = {}, timeou
     return await response.json() as T
   } catch (error) {
     if (error instanceof ApiError) throw error
+    if (!options.signal?.aborted) markServiceUnavailable()
     throw new ApiError(0, 'NETWORK_ERROR', '暂时无法连接服务，请稍后重试。')
   }
 }
