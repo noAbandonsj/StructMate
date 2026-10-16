@@ -17,7 +17,7 @@ const { state, reload } = useOverview()
     <RouterLink class="text-button" to="/practice">先做基础练习</RouterLink>
     <div class="notice">
       个人知识库“{{ authState.account?.default_knowledge_base.name }}”已创建。
-      可以直接使用课程资料，上传自己的资料也是可选路径。真实答疑与 AI 出题需接通模型。
+      可以直接使用课程资料开始学习，也可以上传自己的笔记，结合答疑与练习巩固理解。
     </div>
   </section>
   <section class="report-panel" aria-labelledby="recent-learning-title">

@@ -63,7 +63,7 @@ async function retryConnection() {
         从线性表、栈与队列，到树与图，<br>把每一次学习留在自己的空间里。
       </p>
       <p class="auth-progress">
-        注册后自动创建个人知识库。<br>课程资料、答疑与练习将逐步开放。
+        注册后自动创建个人知识库。<br>结合课程资料、答疑与练习，逐步巩固理解。
       </p>
     </section>
     <section class="auth-card" aria-labelledby="auth-title">
