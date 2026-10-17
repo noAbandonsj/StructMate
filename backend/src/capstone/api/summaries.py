@@ -58,7 +58,9 @@ def export(identifier: UUID, current: AuthenticatedSession, session: DatabaseSes
         f"生成时间：{info['generated_at']}\n\n"
         f"覆盖已完成问答 {info['message_count']} 条消息，截止消息序号 {info['cutoff_sequence']}。"
         f"消息截止时间：{info['cutoff_at']}。"
-        "失败、取消和未完成问答未参与总结，讨论不代表掌握。\n\n" + info["content"] + "\n"
+        "资料不足、失败、取消和未完成问答不参与新总结，讨论不代表掌握。\n\n"
+        + info["content"]
+        + "\n"
     )
     return PlainTextResponse(
         content,

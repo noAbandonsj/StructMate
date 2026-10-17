@@ -45,7 +45,9 @@ class ChatRunner:
                 event.set()
         self.executor.shutdown(wait=True, cancel_futures=True)
 
-    def _save(self, identifier, content=None, citations=None, status=None, error=None):
+    def _save(
+        self, identifier, content=None, citations=None, status=None, error=None, outcome=None
+    ):
         with self.factory() as session, write_transaction(session):
             message = session.get(Message, identifier)
             if message.status != "generating":
@@ -56,6 +58,8 @@ class ChatRunner:
                 message.citations = citations
             if status is not None:
                 message.status = status
+            if outcome is not None:
+                message.answer_outcome = outcome
             if error:
                 message.error_code, message.error_message = error
             return True
@@ -84,6 +88,7 @@ class ChatRunner:
                         Message.sequence < question.sequence,
                         Message.role == "assistant",
                         Message.status == "completed",
+                        Message.answer_outcome.is_distinct_from("insufficient_materials"),
                         history_question.conversation_id == conversation.id,
                         history_question.role == "user",
                         history_question.status == "completed",
@@ -120,6 +125,7 @@ class ChatRunner:
                     identifier,
                     content="当前资料没有找到足够依据。请补充已就绪资料、切换资料范围或把问题描述得更具体。",
                     status="completed",
+                    outcome="insufficient_materials",
                 )
                 return
             instruction = (
@@ -173,7 +179,7 @@ class ChatRunner:
             if not cancelled.is_set():
                 if not content.strip():
                     raise ApiError(503, "GENERATION_EMPTY", "模型未返回内容，请重试。")
-                self._save(identifier, content=content, status="completed")
+                self._save(identifier, content=content, status="completed", outcome="answered")
         except ApiError as error:
             self._save(
                 identifier, status="failed", error=(error.detail["code"], error.detail["message"])

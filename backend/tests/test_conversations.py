@@ -137,9 +137,10 @@ def test_real_retrieval_stream_history_and_deleted_citation(migrated_database, t
             history = first.get(f"/api/v1/conversations/{identifier}/messages").json()
             assert history["total"] == 4
             assert all(item["source_deleted"] for item in history["items"][1]["citations"])
-            assert send(first, headers, identifier, "after-delete").status_code == 202
-            insufficient = wait_answer(first, identifier)
-            assert insufficient["citations"] == [] and "没有找到足够依据" in insufficient["content"]
+            blocked = send(first, headers, identifier, "after-delete")
+            assert blocked.status_code == 409
+            assert blocked.json()["code"] == "NO_READY_MATERIALS"
+            assert first.get(f"/api/v1/conversations/{identifier}/messages").json()["total"] == 4
             assert len(generation.prompts) == 2
         finally:
             second.close()

@@ -32,6 +32,7 @@ from capstone.services.conversations import (
     queue_answer,
     update_conversation,
 )
+from capstone.services.learning_readiness import learning_readiness
 
 router = APIRouter(tags=["conversations"], dependencies=[Depends(no_store)])
 write_dependencies = [Depends(require_origin)]
@@ -115,11 +116,22 @@ class SendInput(RequestKey):
 
 
 @router.get("/conversations/config")
-def chat_config(request: Request, current: AuthenticatedSession):
-    return {
-        "generation_available": request.app.state.generation_service.available,
-        "embedding_available": request.app.state.embedding_service.available,
-    }
+def chat_config(
+    request: Request,
+    current: AuthenticatedSession,
+    session: DatabaseSession,
+    conversation_id: UUID | None = None,
+):
+    conversation = (
+        get_conversation(session, conversation_id, current.user_id) if conversation_id else None
+    )
+    return learning_readiness(
+        session,
+        current.user_id,
+        request.app.state.generation_service.available,
+        request.app.state.embedding_service.available,
+        conversation,
+    )
 
 
 @router.get("/conversations", response_model=Page[ConversationInfo])

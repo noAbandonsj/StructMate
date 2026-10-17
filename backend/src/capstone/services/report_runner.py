@@ -48,6 +48,8 @@ class ReportRunner:
                     "独立新题少于 5 道必须说证据不足，讨论或刷原题不代表掌握。"
                     "日期范围统计与不限日期的当前待复习数量要分别说明，"
                     "不将短期表现当成长期掌握程度。"
+                    "completed_answers 是有效答疑次数，不含 insufficient_materials 资料不足回复；"
+                    "资料不足只表示未找到依据，不代表完成了知识讲解。"
                     "这是历史快照，后续记录或题目核验不会自动修改它。",
                 },
                 {"role": "user", "content": json.dumps(snapshot, ensure_ascii=False)},

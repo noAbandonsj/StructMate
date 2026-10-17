@@ -278,6 +278,7 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(16), default="completed")
     intent: Mapped[str] = mapped_column(String(16), default="explain")
+    answer_outcome: Mapped[str | None] = mapped_column(String(24))
     citations: Mapped[list] = mapped_column(JSON, default=list)
     scope_snapshot: Mapped[dict | None] = mapped_column(JSON)
     error_code: Mapped[str | None] = mapped_column(String(64))

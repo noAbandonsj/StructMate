@@ -69,7 +69,7 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
         )
     ).all()
     answers = session.execute(
-        select(Message.conversation_id, Message.updated_at)
+        select(Message.conversation_id, Message.updated_at, Message.answer_outcome)
         .join(Conversation)
         .where(
             Conversation.user_id == user_id,
@@ -80,6 +80,7 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
             Message.updated_at <= cutoff,
         )
     ).all()
+    insufficient_count = sum(row.answer_outcome == "insufficient_materials" for row in answers)
     wrongs = session.scalars(
         select(WrongQuestion)
         .join(Question)
@@ -116,7 +117,7 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
     active_days.update(row.created_at.astimezone(SHANGHAI).date() for row in questions)
     active_days.update(row.updated_at.astimezone(SHANGHAI).date() for row in answers)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "from_date": from_date.isoformat(),
         "to_date": to_date.isoformat(),
         "time_zone": "Asia/Shanghai",
@@ -134,7 +135,8 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
         "knowledge_points": chapters,
         "learning": {
             "asked_questions": len(questions),
-            "completed_answers": len(answers),
+            "completed_answers": len(answers) - insufficient_count,
+            "insufficient_materials": insufficient_count,
             "active_days": len(active_days),
             "conversation_count": len({row.conversation_id for row in [*questions, *answers]}),
         },
@@ -145,5 +147,6 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
             "current_pending": sum(wrong.status == "pending" for wrong in wrongs),
         },
         "basis": "仅包含服务端已提交的有效作答；题库与 AI 题共同参与，AI 按保存的参考答案计分。"
-        "首次独立、提示、重复和复习分开；不估算学习时长。",
+        "首次独立、提示、重复和复习分开；不估算学习时长。"
+        "有效答疑不含检索未命中的资料不足回复，此类回复单独统计。",
     }

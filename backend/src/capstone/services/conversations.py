@@ -14,6 +14,7 @@ from capstone.db.models import (
     utc_now,
 )
 from capstone.db.session import write_transaction
+from capstone.services.learning_readiness import ready_document_count
 from capstone.services.retrieval import document_predicate
 
 
@@ -155,6 +156,12 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
             raise ApiError(
                 503, "MODELS_NOT_CONFIGURED", "生成模型或向量模型尚未接通，请配置后重试。"
             )
+        if not ready_document_count(session, user_id, snapshot["scope"], snapshot["document_ids"]):
+            raise ApiError(
+                409,
+                "NO_READY_MATERIALS",
+                "当前资料范围没有可用于学习的资料。请切换资料范围、上传笔记，或先做题库练习。",
+            )
         answer = Message(
             conversation_id=identifier,
             sequence=latest + 1,
@@ -189,6 +196,7 @@ def message_info(session, message):
         "reply_to_message_id": message.reply_to_message_id,
         "intent": message.intent,
         "status": message.status,
+        "answer_outcome": message.answer_outcome,
         "citations": citations,
         "error_code": message.error_code,
         "error_message": message.error_message,
