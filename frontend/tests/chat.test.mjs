@@ -53,6 +53,29 @@ function defaultFetch(url) {
   if (url.includes('/conversations?')) return Promise.resolve(response(page([conversation('one')])))
   return Promise.resolve(response(conversation(url.split('/').at(-1))))
 }
+
+test('a conversation with no ready materials keeps the draft and does not send', async () => {
+  let writes = 0, configUrl = ''
+  globalThis.fetch = (url, options) => {
+    if (options?.method === 'POST') writes++
+    if (url.includes('/config')) {
+      configUrl = url
+      return Promise.resolve(response({ generation_available: true, embedding_available: true, ready_document_count: 0 }))
+    }
+    if (url.includes('/messages?')) return Promise.resolve(response(page([])))
+    return defaultFetch(url)
+  }
+  const view = scope('empty-course')
+  try {
+    await until(() => view.state.config && !view.state.loading)
+    view.state.draft = '请解释栈'
+    await view.send()
+    assert.ok(configUrl.includes('conversation_id=empty-course'))
+    assert.equal(writes, 0)
+    assert.equal(view.state.draft, '请解释栈')
+    assert.match(view.state.error, /资料范围没有可用于学习的资料/)
+  } finally { view.effect.stop() }
+})
 test('restored generating answers connect without submitting another question', async () => {
   let writes = 0
   globalThis.fetch = (url, options) => { if (options.method === 'POST') writes++; return defaultFetch(url) }

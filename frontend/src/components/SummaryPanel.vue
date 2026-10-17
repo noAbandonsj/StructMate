@@ -9,7 +9,7 @@ function time(value: string | null) { return value ? new Date(value).toLocaleStr
 <template>
   <section class="summary-panel" aria-labelledby="summary-title">
     <div class="section-heading"><h2 id="summary-title">总结本次学习</h2><button class="text-button" type="button" :disabled="loading" @click="emit('refresh')">刷新总结</button></div>
-    <p class="field-help">总结已完成的问答，不把“讨论过”当作“已掌握”。新总结失败时保留上一次成功内容。</p>
+    <p class="field-help">总结已完成的有效问答，排除资料不足的回复；不把“讨论过”当作“已掌握”。新总结失败时保留上一次成功内容。</p>
     <p v-if="!canGenerate" class="notice">生成模型尚未接通，已有总结仍可查看和导出。</p>
     <p v-if="summary?.status === 'generating'" class="notice" role="status">正在生成总结，离开或刷新后可恢复状态。</p>
     <p v-if="error || summary?.error_message" class="form-error" role="alert">{{ error || summary?.error_message }}</p>

@@ -1,15 +1,17 @@
 import { request } from './client'
 import type { Page } from './chat'
 import type { Practice } from './practice'
+import type { Config } from './chat'
 
 export type Category = 'first_independent' | 'first_hinted' | 'repeat' | 'review'
 export interface Measure { count: number; correct_count: number; accuracy: number | null }
 export interface Stats {
+  schema_version?: number
   from_date: string; to_date: string; time_zone: string; as_of: string
   attempts: Measure; categories: Record<Category, Measure>; sources: Record<'bank' | 'ai', Measure>
   hinted_attempt_count: number
   knowledge_points: { knowledge_point_id: string; name: string; attempts: Measure; independent: Measure; evidence: string }[]
-  learning: { asked_questions: number; completed_answers: number; active_days: number; conversation_count: number }
+  learning: { asked_questions: number; completed_answers: number; insufficient_materials?: number; active_days: number; conversation_count: number }
   wrong_questions: { new_in_range: number; current_pending: number }; basis: string
 }
 export interface Report {
@@ -18,6 +20,7 @@ export interface Report {
   content: string; error_code: string | null; error_message: string | null
 }
 export interface Overview {
+  readiness: Config
   stats: Stats; recent_conversations: { id: string; title: string; updated_at: string }[]
   recent_practices: Practice[]
 }

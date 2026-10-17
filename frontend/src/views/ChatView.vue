@@ -21,6 +21,7 @@ let citationVersion = 0
 watch(selected, () => { citationVersion++; citation.value = null; citationError.value = '' })
 watch(() => state.conversation?.title, value => { title.value = value ?? '' })
 const available = computed(() => state.config?.generation_available && state.config.embedding_available)
+const noReadyMaterials = computed(() => state.config?.ready_document_count === 0)
 const practicePoint = computed(() => state.conversation?.knowledge_point_id || [...state.messages].reverse().flatMap(message => message.citations).find(value => value.knowledge_point_id)?.knowledge_point_id)
 async function start() {
   const documents = typeof route.query.document === 'string' ? [route.query.document] : []
@@ -76,6 +77,11 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
             <p v-if="state.conversation.document_ids.length" class="field-help">当前限于指定资料；更改范围会取消该限定。</p>
             <button :disabled="state.busy || !!active" @click="update({ archived: !state.conversation.archived })">{{ state.conversation.archived ? '恢复会话' : '归档会话' }}</button>
           </details>
+          <div v-if="noReadyMaterials" class="notice" role="status">
+            当前资料范围没有可用于学习的资料，暂不能提问。可在会话设置中切换资料范围，
+            <RouterLink to="/knowledge">上传自己的笔记</RouterLink>，或<RouterLink to="/practice">前往练习中心选择题库练习</RouterLink>。
+            <button type="button" class="text-button" :disabled="state.loading" @click="reload()">重新检查资料</button>
+          </div>
           <div class="message-history" aria-label="会话记录">
             <RouterLink :to="{ path: '/practice', query: { conversation: selected, point: practicePoint || undefined } }">{{ practicePoint ? '练习这个知识点' : '进入练习中心' }}</RouterLink>
             <button v-if="state.historyPage > 1" @click="older()" :disabled="state.loading">查看更早消息</button>
@@ -87,6 +93,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
               <p v-if="message.status === 'generating'" class="field-help">正在检索和生成回答…</p>
               <p v-if="message.status === 'failed'" class="form-error" role="alert">{{ message.error_message }}</p>
               <p v-if="message.status === 'cancelled'" class="field-help">回答已取消，已生成内容保留。</p>
+              <p v-if="message.answer_outcome === 'insufficient_materials'" class="field-help">资料不足 · 未计入有效答疑，也不参与新的学习总结。可调整资料范围或补充资料后重新提问。</p>
               <div v-if="message.citations.length" class="citation-links"><span>检索依据：</span><button v-for="value in message.citations" :key="value.number" class="text-button" @click="showCitation(value)">[{{ value.number }}] {{ value.filename }}{{ value.source_deleted ? '（来源已删除）' : '' }}</button></div>
               <RouterLink v-if="message.citations.find(value => value.knowledge_point_id)" :to="{ path: '/practice', query: { conversation: selected, point: message.citations.find(value => value.knowledge_point_id)?.knowledge_point_id || undefined } }">练习引用的知识点</RouterLink>
               <button v-if="index === state.messages.length - 1 && ['failed','cancelled'].includes(message.status)" :disabled="state.busy || !!active || !available" @click="retry(message.id)">重试这个问题</button>
@@ -98,7 +105,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
             <textarea id="chat-question" v-model="state.draft" maxlength="4000" rows="3" placeholder="输入问题，或继续追问…" :disabled="state.conversation.archived"></textarea>
             <div class="composer-actions"><select v-model="state.intent" aria-label="回答方式"><option value="explain">直接讲解</option><option value="hint">给我提示</option><option value="example">用例子解释</option></select>
               <button v-if="active" type="button" @click="cancel()" :disabled="state.busy">取消回答</button>
-              <button v-else class="primary-button" :disabled="state.busy || !available || !state.draft.trim() || state.conversation.archived">{{ state.busy ? '正在发送…' : '发送问题' }}</button>
+              <button v-else class="primary-button" :disabled="state.busy || state.loading || !available || noReadyMaterials || !state.draft.trim() || state.conversation.archived">{{ state.busy ? '正在发送…' : '发送问题' }}</button>
             </div>
             <p v-if="state.conversation.archived" class="field-help">会话已归档，恢复后可继续提问。</p>
           </form>

@@ -100,7 +100,8 @@ function safeLink(url: string) {
           <strong>{{ document.filename }}</strong>
           <p class="field-help">{{ document.file_type.toUpperCase() }} · {{ sizeLabel(document.size_bytes) }}</p>
           <span class="document-status" :class="document.status">{{ statusLabels[document.status] }}</span>
-          <p v-if="document.error_message" class="document-error">{{ document.error_message }}</p>
+          <p v-if="library.is_readonly && document.status === 'failed'" class="document-error">课程资料待维护者处理，暂不可用于答疑。上次处理失败于 {{ new Date(document.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }}：{{ document.error_message }}</p>
+          <p v-else-if="document.error_message" class="document-error">{{ document.error_message }}</p>
           <details v-if="document.source_info?.sources?.length" class="source-notice">
             <summary>来源与许可</summary>
             <p v-for="source in document.source_info.sources" :key="source.url" class="field-help">
