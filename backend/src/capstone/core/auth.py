@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from capstone.core.errors import ApiError
 from capstone.core.settings import Settings
-from capstone.db.models import AuthSession, utc_now
+from capstone.db.models import AuthSession, User, utc_now
 from capstone.db.session import get_session
 
 SESSION_COOKIE = "capstone_session"
@@ -86,6 +86,20 @@ def require_session(request: Request, session: DatabaseSession) -> CurrentSessio
 
 
 AuthenticatedSession = Annotated[CurrentSession, Depends(require_session)]
+
+
+def check_admin(session: Session, user_id: UUID) -> None:
+    if session.scalar(select(User.role).where(User.id == user_id)) != "admin":
+        raise ApiError(403, "ADMIN_REQUIRED", "此操作需要管理员权限。")
+
+
+def require_admin(current: AuthenticatedSession, session: DatabaseSession) -> CurrentSession:
+    check_admin(session, current.user_id)
+    session.rollback()
+    return current
+
+
+Administrator = Annotated[CurrentSession, Depends(require_admin)]
 
 
 def require_csrf(request: Request, current: CurrentSession) -> None:

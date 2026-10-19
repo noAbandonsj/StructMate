@@ -4,6 +4,7 @@ export interface PublicUser {
   id: string
   username: string
   display_name: string
+  role: 'user' | 'admin'
 }
 
 export interface AccountResponse {

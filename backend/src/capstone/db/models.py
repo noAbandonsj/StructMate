@@ -32,12 +32,14 @@ class User(Base):
         ),
         CheckConstraint("length(display_name) BETWEEN 1 AND 32", name="ck_users_display_name"),
         CheckConstraint("length(password_hash) > 0", name="ck_users_password_hash"),
+        CheckConstraint("role IN ('user', 'admin')", name="ck_users_role"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     username: Mapped[str] = mapped_column(String(32))
     display_name: Mapped[str] = mapped_column(String(32))
     password_hash: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(String(16), default="user", server_default="user")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
 
@@ -163,6 +165,23 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class CourseMaintenance(Base):
+    __tablename__ = "course_maintenance"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('upload', 'process', 'delete')", name="ck_course_maintenance_action"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    document_id: Mapped[UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="RESTRICT"), index=True
+    )
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    action: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
 class DocumentChunk(Base):

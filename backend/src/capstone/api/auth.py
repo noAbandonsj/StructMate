@@ -64,6 +64,7 @@ class PublicUser(BaseModel):
     id: UUID
     username: str
     display_name: str
+    role: Literal["user", "admin"]
 
 
 class PublicKnowledgeBase(BaseModel):

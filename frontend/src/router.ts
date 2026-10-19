@@ -9,6 +9,7 @@ import ChatView from './views/ChatView.vue'
 import PracticeView from './views/PracticeView.vue'
 import WrongView from './views/WrongView.vue'
 import ReportsView from './views/ReportsView.vue'
+import CourseAdminView from './views/CourseAdminView.vue'
 
 import { navigation, safeReturnPath } from './navigation'
 import { authState, restoreAccount } from './state/auth'
@@ -38,6 +39,7 @@ export const router = createRouter({
     { path: '/practice/:id', component: PracticeView, meta: { title: '练习中心', requiresAuth: true } },
     { path: '/wrong/:id', component: WrongView, meta: { title: '错题本', requiresAuth: true } },
     { path: '/reports/:id', component: ReportsView, meta: { title: '学习报告', requiresAuth: true } },
+    { path: '/admin/course', component: CourseAdminView, meta: { title: '课程资料管理', requiresAuth: true, requiresAdmin: true } },
     {
       path: '/:pathMatch(.*)*',
       component: NotFoundView,
@@ -47,11 +49,12 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  await restoreAccount()
+  await restoreAccount(Boolean(to.meta.requiresAdmin))
   if (authState.status === 'error') return true
   if (to.meta.requiresAuth && !authState.account) {
     return { name: 'login', query: { redirect: safeReturnPath(to.fullPath) } }
   }
   if (to.meta.authPage && authState.account) return safeReturnPath(to.query.redirect)
+  if (to.meta.requiresAdmin && authState.account?.user.role !== 'admin') return '/'
   return true
 })

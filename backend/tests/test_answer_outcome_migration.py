@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from alembic import command
 from sqlalchemy.orm import Session
 
-from capstone.db.models import Conversation, User
+from capstone.db.models import Conversation
 
 
 def test_upgrade_classifies_only_old_fallback_without_rewriting_history(
@@ -13,8 +13,14 @@ def test_upgrade_classifies_only_old_fallback_without_rewriting_history(
     command.downgrade(migration_config, "0007")
     user_id, conversation_id = uuid4(), uuid4()
     with Session(migrated_database) as session, session.begin():
-        session.add(
-            User(id=user_id, username="migration_user", display_name="同学", password_hash="hash")
+        # Seed the historical schema explicitly; today's User model has newer columns.
+        session.execute(
+            sa.text(
+                "INSERT INTO users (id, username, display_name, password_hash, "
+                "created_at, updated_at) "
+                "VALUES (:id, 'migration_user', '同学', 'hash', :stamp, :stamp)"
+            ),
+            {"id": user_id.hex, "stamp": "2026-10-01 10:00:00.000000"},
         )
         session.flush()
         session.add(Conversation(id=conversation_id, user_id=user_id))

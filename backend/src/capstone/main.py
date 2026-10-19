@@ -7,6 +7,7 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import sessionmaker
 
 from capstone import __version__
+from capstone.api.admin import router as admin_router
 from capstone.api.auth import router as auth_router
 from capstone.api.conversations import router as conversations_router
 from capstone.api.documents import router as documents_router
@@ -151,6 +152,7 @@ def create_app(
     )
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(admin_router, prefix="/api/v1")
     app.include_router(knowledge_router, prefix="/api/v1")
     app.include_router(documents_router, prefix="/api/v1")
     app.include_router(conversations_router, prefix="/api/v1")

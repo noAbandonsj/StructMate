@@ -288,3 +288,15 @@ button[aria-pressed=true] { background: #e7eee8; border-color: var(--accent); co
   .recommendation-grid { grid-template-columns: minmax(0, 1fr); }
   .auth-layout { width: 100%; grid-template-columns: minmax(0, 1fr) 380px; gap: 30px; }
 }
+/* Course maintenance shares document presentation with the learning library. */
+.course-upload-fields { display: grid; gap: 10px; margin: 16px 0; max-width: 680px; }
+.course-upload > summary { cursor: pointer; padding: 14px 0; color: var(--accent); font-weight: 600; }
+.course-upload-fields .self-authored { display: flex; align-items: center; gap: 8px; font-weight: normal; }
+.self-authored input { width: auto; }
+.course-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 20px 0; }
+.course-filters label { display: grid; gap: 8px; }
+.course-document-details { width: 100%; min-width: 0; }
+.course-document-details h3 { font-size: 15px; margin: 16px 0 8px; }
+.course-document-details ul { padding-left: 20px; font-size: 13px; color: var(--muted); }
+.parsed-chunk { border-top: 1px solid var(--line); padding: 12px 0; }
+.parsed-chunk pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; }

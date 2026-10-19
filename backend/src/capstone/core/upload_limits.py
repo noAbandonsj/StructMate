@@ -12,8 +12,10 @@ class UploadBodyLimit:
         if not (
             scope["type"] == "http"
             and scope.get("method") == "POST"
-            and path.startswith("/api/v1/knowledge-bases/")
-            and path.endswith("/documents")
+            and (
+                (path.startswith("/api/v1/knowledge-bases/") and path.endswith("/documents"))
+                or path == "/api/v1/admin/course/documents"
+            )
         ):
             await self.app(scope, receive, send)
             return

@@ -31,6 +31,7 @@ def test_migration_matches_models_and_populated_database_can_be_downgraded(
         "documents",
         "document_chunks",
         "document_tasks",
+        "course_maintenance",
         "conversations",
         "messages",
         "questions",

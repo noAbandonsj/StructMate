@@ -5,7 +5,7 @@ import type { LibraryInfo } from '../api/knowledge'
 import { ApiError } from '../api/client'
 import { authState, restoreAccount } from './auth'
 
-export function useDocuments(library: Ref<LibraryInfo>) {
+export function useDocuments(library: Ref<LibraryInfo>, management = false) {
   const state = reactive<{
     documents: api.DocumentInfo[]
     config: api.UploadConfig | null
@@ -17,9 +17,11 @@ export function useDocuments(library: Ref<LibraryInfo>) {
     actionError: string
     notice: string
     deletion: api.DocumentInfo | null
+    filters: { search: string; status: string }
   }>({
     documents: [], config: null, total: 0, page: 1, loading: false, busy: false,
     error: '', actionError: '', notice: '', deletion: null,
+    filters: { search: '', status: '' },
   })
   let epoch = 0
   let readVersion = 0
@@ -40,7 +42,7 @@ export function useDocuments(library: Ref<LibraryInfo>) {
     if (!disposed && authState.account) timer = setTimeout(() => void reload(false), 2000)
   }
   async function fail(error: unknown, mutation = false) {
-    if (error instanceof ApiError && error.status === 401) await restoreAccount(true)
+    if (error instanceof ApiError && (error.status === 401 || (management && error.status === 403))) await restoreAccount(true)
     else {
       const message = error instanceof Error ? error.message : '操作失败，请重试。'
       if (mutation) state.actionError = message
@@ -62,7 +64,7 @@ export function useDocuments(library: Ref<LibraryInfo>) {
     state.error = ''
     try {
       const [documents, config] = await Promise.all([
-        api.getDocuments(libraryId, state.page, controller.signal), api.getUploadConfig(controller.signal),
+        api.getDocuments(libraryId, state.page, controller.signal, management, state.filters), api.getUploadConfig(controller.signal),
       ])
       if (!valid(startedAt, userId, libraryId) || version !== readVersion) return
       if (state.page > 1 && !documents.items.length) {
@@ -74,7 +76,7 @@ export function useDocuments(library: Ref<LibraryInfo>) {
       state.total = documents.total
       state.config = config
       if (state.deletion) {
-        const deleted = await api.getDocument(state.deletion.id, controller.signal)
+        const deleted = await api.getDocument(state.deletion.id, controller.signal, management)
         if (!valid(startedAt, userId, libraryId) || version !== readVersion) return
         state.deletion = deleted
         if (deleted.stage === 'complete') {
@@ -94,7 +96,7 @@ export function useDocuments(library: Ref<LibraryInfo>) {
 
   async function mutate<T>(action: (csrf: string, signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
     const account = authState.account
-    if (!account || disposed || state.busy || library.value.is_readonly) return
+    if (!account || disposed || state.busy || (management ? account.user.role !== 'admin' : library.value.is_readonly)) return
     const libraryId = library.value.id
     const startedAt = epoch
     const controller = new AbortController()
@@ -112,15 +114,16 @@ export function useDocuments(library: Ref<LibraryInfo>) {
     }
   }
 
-  async function upload(file: File, pointId: string) {
+  async function upload(file: File, pointId: string, attribution?: api.Attribution) {
     const libraryId = library.value.id
     const userId = authState.account?.user.id
     const startedAt = epoch
-    const result = await mutate((csrf, signal) => api.uploadDocument(libraryId, file, pointId, csrf, signal))
+    const result = await mutate((csrf, signal) => api.uploadDocument(libraryId, file, pointId, csrf, signal, management, attribution))
     if (!valid(startedAt, userId, libraryId)) return false
     if (result) {
-      state.notice = result.duplicate ? '同内容资料已存在，可以查看已有文件。' : '文件已保存，正在处理。'
+      state.notice = result.duplicate ? '同内容资料已存在，可以查看已有文件。' : '文件已保存，请查看处理状态；就绪后可用于学习。'
       state.page = 1
+      if (management) state.filters = { search: '', status: '' }
       await reload(false)
       return true
     }
@@ -130,7 +133,7 @@ export function useDocuments(library: Ref<LibraryInfo>) {
     const startedAt = epoch
     const userId = authState.account?.user.id
     const libraryId = library.value.id
-    const result = await mutate((csrf, signal) => api.processDocument(id, csrf, signal))
+    const result = await mutate((csrf, signal) => api.processDocument(id, csrf, signal, management))
     if (!valid(startedAt, userId, libraryId)) return
     if (result) {
       state.notice = '已重新提交处理。'
@@ -141,7 +144,7 @@ export function useDocuments(library: Ref<LibraryInfo>) {
     const startedAt = epoch
     const userId = authState.account?.user.id
     const libraryId = library.value.id
-    const result = await mutate((csrf, signal) => api.deleteDocument(id, csrf, signal))
+    const result = await mutate((csrf, signal) => api.deleteDocument(id, csrf, signal, management))
     if (!valid(startedAt, userId, libraryId)) return
     if (result) {
       state.deletion = result
@@ -173,5 +176,10 @@ export function useDocuments(library: Ref<LibraryInfo>) {
     if (authState.account) void reload()
   }, { immediate: true })
   onScopeDispose(() => { disposed = true; reset() })
-  return { state, reload, upload, process, remove, setPage }
+  async function setFilters(search: string, status: string) {
+    state.filters = { search: search.trim(), status }
+    state.page = 1
+    await reload()
+  }
+  return { state, reload, upload, process, remove, setPage, setFilters }
 }

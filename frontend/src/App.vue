@@ -85,6 +85,11 @@ async function retryAccount() {
           {{ page.title }}
         </RouterLink>
       </nav>
+      <template v-if="authState.account.user.role === 'admin'">
+        <p class="nav-label">课程维护</p>
+        <RouterLink to="/admin/course" class="nav-item" :class="{ active: inSection('/admin/course') }"
+          :aria-current="inSection('/admin/course') ? 'page' : undefined">课程资料管理</RouterLink>
+      </template>
       <div class="sidebar-footer">
         <span class="phase-label">个人学习空间</span>
         <p>从理解概念，到独立解题。</p>

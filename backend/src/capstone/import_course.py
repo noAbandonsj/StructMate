@@ -24,6 +24,7 @@ def import_course_data(
     content_directory: Path = REPOSITORY_ROOT / "content",
     *,
     retry_failed: bool = False,
+    restore_deleted: bool = False,
 ) -> tuple[int, int, int]:
     root = content_directory.resolve()
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
@@ -64,24 +65,51 @@ def import_course_data(
         ):
             raise ApiError(422, "COURSE_POINT_MISSING", "课程资料关联的知识点不存在。")
         for item, data, references in prepared:
+            # A tombstone is scoped by stable content code, not by its hash:
+            # even an updated preset must not silently undo a maintainer's deletion.
+            tombstone = session.scalar(
+                select(Document.id).where(
+                    Document.knowledge_base_id == library_id,
+                    Document.status == "deleted",
+                    Document.source_info["content_code"].as_string() == item["code"],
+                )
+            )
+            live = session.scalar(
+                select(Document.id).where(
+                    Document.knowledge_base_id == library_id,
+                    Document.status != "deleted",
+                    Document.source_info["content_code"].as_string() == item["code"],
+                )
+            )
+            session.rollback()
+            if tombstone is not None and live is None and not restore_deleted:
+                skipped += 1
+                continue
             root_code = item["knowledge_point_codes"][0].split(".", 1)[0]
             if root_code not in point_ids:
                 raise ApiError(422, "COURSE_POINT_MISSING", "课程资料关联的知识点不存在。")
-            document, created = create_document(
-                session,
-                store,
-                library_id,
-                item["title"] + ".md",
-                data,
-                settings.upload_max_mib * 1024 * 1024,
-                point_ids[root_code],
-                source_info={
-                    "content_code": item["code"],
-                    "title": item["title"],
-                    "adaptation": item["adaptation"],
-                    "sources": references,
-                },
-            )
+            try:
+                document, created = create_document(
+                    session,
+                    store,
+                    library_id,
+                    item["title"] + ".md",
+                    data,
+                    settings.upload_max_mib * 1024 * 1024,
+                    point_ids[root_code],
+                    source_info={
+                        "content_code": item["code"],
+                        "title": item["title"],
+                        "adaptation": item["adaptation"],
+                        "sources": references,
+                    },
+                    preserve_course_removals=not restore_deleted,
+                )
+            except ApiError as error:
+                if error.detail["code"] != "COURSE_REMOVED":
+                    raise
+                skipped += 1
+                continue
             added += int(created)
             skipped += int(not created)
             document_id = document.id
@@ -108,12 +136,20 @@ def import_course_data(
 def main() -> int:
     parser = argparse.ArgumentParser(description="导入已核对来源的课程笔记")
     parser.add_argument("--retry-failed", action="store_true", help="重新处理既有失败的课程资料")
+    parser.add_argument(
+        "--restore-deleted",
+        action="store_true",
+        help="显式恢复已移除的预置资料（登记新记录，保留历史）",
+    )
     arguments = parser.parse_args()
     settings = Settings()
     engine = create_database_engine(settings.sqlite_path)
     try:
         added, skipped, retried = import_course_data(
-            engine, settings, retry_failed=arguments.retry_failed
+            engine,
+            settings,
+            retry_failed=arguments.retry_failed,
+            restore_deleted=arguments.restore_deleted,
         )
     except Exception:
         print("课程导入失败，请检查迁移、课程初始化、内容摘要和来源许可。")
