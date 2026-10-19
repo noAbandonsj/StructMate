@@ -89,7 +89,6 @@ async function retryConnection() {
             required
             minlength="3"
             maxlength="32"
-            placeholder="例如 student_01"
             aria-describedby="username-help"
           >
           <p id="username-help" class="field-help">3–32 位英文字母、数字或下划线。</p>
@@ -115,7 +114,6 @@ async function retryConnection() {
               required
               minlength="8"
               maxlength="128"
-              placeholder="输入密码"
               aria-describedby="password-help"
             >
             <button
