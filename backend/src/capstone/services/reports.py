@@ -118,6 +118,26 @@ def report_markdown(report):
         lines.append(
             f"| {label} | {item['count']} | {item['correct_count']} | {percent(item['accuracy'])} |"
         )
+    if data.get("topics"):
+        lines.extend(
+            [
+                "",
+                "## 练习主题",
+                "",
+                "| 主题 | 作答 | 错误 | 参考资料 |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
+
+        def cell(value):
+            return value.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+
+        for topic in data["topics"]:
+            lines.append(
+                f"| {cell(topic['name'])} | {topic['attempts']['count']} | "
+                f"{topic['error_count']} | "
+                f"{cell('、'.join(topic['materials']) or 'AI 通用知识')} |"
+            )
     lines.extend(
         [
             "",

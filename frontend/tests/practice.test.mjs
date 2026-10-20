@@ -27,6 +27,7 @@ async function until(predicate) {
   assert.ok(predicate(), 'state did not settle')
 }
 function defaults(url) {
+  if (url.includes('/practice-sessions/materials?')) return Promise.resolve(response(page([])))
   if (url.includes('/knowledge-points')) return Promise.resolve(response(page([])))
   if (url.includes('/learning/performance')) return Promise.resolve(response({ items: [], window_days: 30 }))
   if (url.endsWith('/config')) return Promise.resolve(response({ generation_available: false }))
@@ -40,35 +41,63 @@ function scope(user = 'student', id = 'one', wrongModule = false) {
   const selected = vue.ref(id), effect = vue.effectScope()
   return { effect, selected, ...effect.run(() => (wrongModule ? wrong.useWrong(selected) : practice.usePractice(selected))) }
 }
-test('a failed submission preserves the selected option and request key', async () => {
+test('a failed group submission preserves the selected option and request key across remount', async () => {
   const posted = []
   globalThis.fetch = (url, options) => {
-    if (url.endsWith('/attempts')) { posted.push(JSON.parse(options.body)); return Promise.reject(new Error('offline')) }
+    if (url.endsWith('/submit')) { posted.push(JSON.parse(options.body)); return Promise.reject(new Error('offline')) }
     return defaults(url)
   }
   const view = scope('failed-submit')
   try {
     await until(() => view.state.items.length)
     view.state.choices.question = 'A'
-    await view.submit(view.state.items[0]); await view.submit(view.state.items[0])
+    await view.submitAll(); await view.submitAll()
     assert.equal(view.state.choices.question, 'A')
     assert.equal(posted[0].client_request_id, posted[1].client_request_id)
     assert.ok(view.state.error)
     await view.reload()
     assert.ok(view.state.error, 'a background refresh must not erase the submission error')
   } finally { view.effect.stop() }
+  const restored = scope('failed-submit')
+  try {
+    await until(() => restored.state.items.length)
+    assert.equal(restored.state.choices.question, 'A')
+    await restored.submitAll()
+    assert.equal(posted[0].client_request_id, posted[2].client_request_id)
+    assert.deepEqual(posted[0].answers, [{ practice_item_id: 'question', answer: 'A' }])
+  } finally { restored.effect.stop() }
 })
-test('switching bank and AI preserves parameters and does not change the existing practice', async () => {
-  globalThis.fetch = defaults
+test('legacy bank preferences create AI exercises while preserving existing practice history', async () => {
+  const posted = []
+  globalThis.localStorage.setItem('capstone.practice.preferences.mode-owner', JSON.stringify({
+    question_source: 'bank', mode: 'adaptive', count: 8, difficulty: 'intermediate', knowledge_point_ids: ['tree'],
+  }))
+  globalThis.fetch = (url, options) => {
+    if (url.endsWith('/practice-sessions') && options?.method === 'POST') {
+      posted.push(JSON.parse(options.body))
+      return Promise.resolve(response({ ...session('new-ai'), question_source: 'ai' }))
+    }
+    return defaults(url)
+  }
   const view = scope('mode-owner')
   try {
     await until(() => view.state.practice)
-    view.state.form.count = 8; view.state.form.generation_requirements = '概念与复杂度'
-    view.state.form.question_source = 'ai'; view.state.form.question_source = 'bank'
+    assert.equal(view.state.form.question_source, 'ai')
+    assert.equal(view.state.form.mode, undefined)
     assert.equal(view.state.form.count, 8)
-    assert.equal(view.state.form.generation_requirements, '概念与复杂度')
+    assert.equal(view.state.form.difficulty, 'intermediate')
+    assert.equal(view.state.form.knowledge_point_ids, undefined)
+    view.state.form.topic = '二叉树遍历'
+    view.state.form.generation_requirements = '概念与复杂度'
     assert.equal(view.state.practice.question_source, 'bank')
-    view.state.form.question_source = 'ai'
+    await view.create()
+    assert.equal(posted[0].question_source, 'ai')
+    assert.equal(posted[0].generation_requirements, '概念与复杂度')
+    assert.equal(posted[0].mode, undefined)
+    assert.equal(posted[0].topic, '二叉树遍历')
+    assert.deepEqual(posted[0].document_ids, [])
+    assert.equal(posted[0].count, 8)
+    assert.equal(view.state.practice.question_source, 'bank')
   } finally { view.effect.stop() }
   const restored = scope('mode-owner')
   try { assert.equal(restored.state.form.question_source, 'ai') } finally { restored.effect.stop() }
@@ -87,6 +116,53 @@ test('an unsubmitted choice survives remount and is cleared on sign out', async 
     assert.deepEqual(restored.state.choices, {})
     assert.equal(globalThis.sessionStorage.getItem('capstone.practice.draft-owner.one'), null)
   } finally { restored.effect.stop() }
+})
+
+test('a lost creation response keeps the topic, selected materials and request key', async () => {
+  const posted = []
+  globalThis.fetch = (url, options) => {
+    if (url.endsWith('/practice-sessions') && options?.method === 'POST') {
+      posted.push(JSON.parse(options.body)); return Promise.reject(new Error('offline'))
+    }
+    return defaults(url)
+  }
+  const view = scope('topic-retry-owner', '')
+  try {
+    await until(() => view.state.ready)
+    view.state.form.topic = '  循环队列判空  '
+    view.state.form.document_ids = ['my-notes']
+    await view.create(); await view.create()
+    assert.equal(posted[0].topic, '循环队列判空')
+    assert.deepEqual(posted[0].document_ids, ['my-notes'])
+    assert.equal(posted[0].client_request_id, posted[1].client_request_id)
+    assert.ok(view.state.error)
+    assert.equal(JSON.parse(globalThis.localStorage.getItem('capstone.practice.preferences.topic-retry-owner')).topic, '')
+    view.state.form.topic = '二叉树遍历'
+    await view.create()
+    assert.notEqual(posted[0].client_request_id, posted[2].client_request_id)
+  } finally { view.effect.stop() }
+  const restored = scope('topic-retry-owner', '')
+  try {
+    assert.equal(restored.state.form.topic, '二叉树遍历')
+    assert.deepEqual(restored.state.form.document_ids, ['my-notes'])
+  } finally { restored.effect.stop() }
+})
+
+test('material choices from an old account cannot enter the new account', async () => {
+  const pending = []
+  globalThis.fetch = url => url.includes('/practice-sessions/materials?')
+    ? new Promise(resolve => pending.push(resolve)) : defaults(url)
+  const view = scope('materials-first', '')
+  try {
+    await until(() => pending.length === 1)
+    auth.authState.account = account('materials-second'); await vue.nextTick()
+    await until(() => pending.length === 2)
+    pending[1](response(page([{ id: 'second-file', filename: '当前账号资料', kind: 'personal' }])))
+    await until(() => view.state.ready)
+    pending[0](response(page([{ id: 'private-file', filename: '旧账号私人资料', kind: 'personal' }])))
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(view.state.materials.map(value => value.id), ['second-file'])
+  } finally { view.effect.stop() }
 })
 test('changing accounts rejects an old practice detail response', async () => {
   const pending = []
@@ -171,5 +247,42 @@ test('failed refresh keeps existing practice data and exposes the read failure s
     globalThis.fetch = defaults
     await view.reload()
     assert.equal(view.state.readError, '')
+  } finally { view.effect.stop() }
+})
+
+
+test('only a completed set of choices is sent in one request and all results appear together', async () => {
+  const questions = [item('first-question'), item('second-question')]
+  const completed = questions.map((value, index) => ({ ...value, attempt: {
+    id: 'result-' + index, answer: index ? 'B' : 'A', is_correct: true, is_valid: true,
+  } }))
+  const posted = []
+  let submitted = false
+  const metadata = () => ({ ...session('one'), effective_count: 2, actual_count: 2,
+    status: submitted ? 'completed' : 'ready', submitted_count: submitted ? 2 : 0 })
+  globalThis.fetch = (url, options) => {
+    if (url.endsWith('/submit')) {
+      posted.push(JSON.parse(options.body)); submitted = true
+      return Promise.resolve(response({ practice: metadata(), items: completed }))
+    }
+    if (url.endsWith('/practice-sessions/one')) return Promise.resolve(response(metadata()))
+    if (url.endsWith('/practice-sessions/one/items')) return Promise.resolve(response(page(submitted ? completed : questions)))
+    return defaults(url)
+  }
+  const view = scope('submit-all-owner')
+  try {
+    await until(() => view.state.ready)
+    view.state.choices['first-question'] = 'A'
+    await view.submitAll()
+    assert.equal(posted.length, 0)
+    assert.ok(view.state.items.every(value => !value.attempt))
+    view.state.choices['second-question'] = 'B'
+    await view.submitAll()
+    assert.equal(posted.length, 1)
+    assert.equal(posted[0].answers.length, 2)
+    assert.equal(view.state.practice.status, 'completed')
+    assert.ok(view.state.items.every(value => value.attempt))
+    assert.deepEqual(view.state.choices, {})
+    assert.equal(globalThis.sessionStorage.getItem('capstone.practice.submit-all-owner.submit.one'), null)
   } finally { view.effect.stop() }
 })

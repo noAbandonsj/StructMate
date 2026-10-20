@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from capstone.core.settings import REPOSITORY_ROOT, Settings
+from capstone.core.settings import Settings
 from capstone.db.models import KnowledgePoint, Resource
 from capstone.db.session import create_database_engine, write_transaction
 
@@ -37,7 +37,7 @@ class ResourceData(BaseModel):
         return value
 
 
-def import_resources(engine, packet=REPOSITORY_ROOT / "content/resources.json"):
+def import_resources(engine, packet):
     entries = [
         ResourceData.model_validate(item)
         for item in json.loads(Path(packet).read_text(encoding="utf-8"))
@@ -79,7 +79,9 @@ def import_resources(engine, packet=REPOSITORY_ROOT / "content/resources.json"):
 
 def main():
     parser = argparse.ArgumentParser(description="导入或更新维护的真实资源外链，不复制网页正文")
-    parser.add_argument("--file", type=Path, default=REPOSITORY_ROOT / "content/resources.json")
+    parser.add_argument(
+        "--file", type=Path, required=True, help="管理员维护的资源 JSON 文件（无内置外链）"
+    )
     args = parser.parse_args()
     engine = create_database_engine(Settings().sqlite_path)
     try:

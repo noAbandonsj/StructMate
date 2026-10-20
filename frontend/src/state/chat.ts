@@ -125,7 +125,7 @@ export function useChat(selected: Ref<string>) {
     const content = state.draft.trim(), version = epoch, user = authState.account?.user.id, id = selected.value
     if (!content || !id || active.value || state.conversation?.archived) return
     if (state.config?.ready_document_count === 0) {
-      state.error = '当前资料范围没有可用于学习的资料。请切换资料范围、上传笔记，或先做题库练习。'
+      state.error = '当前资料范围没有可用于学习的资料。请切换资料范围、上传笔记，或前往练习中心使用实时 AI 出题。'
       return
     }
     if (!pending || pending.content !== content || pending.intent !== state.intent)

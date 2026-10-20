@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from capstone.core.errors import ApiError
 from capstone.core.model_ports import EmbeddingBatch
-from capstone.core.settings import Settings
+from capstone.core.settings import REPOSITORY_ROOT, Settings
 from capstone.db.models import Document, DocumentChunk, DocumentTask
 from capstone.import_course import import_course_data
 from capstone.main import create_app
@@ -29,12 +29,23 @@ ORIGIN = {"Origin": "http://127.0.0.1:5173"}
 TEXT = "# 栈\n\n栈是后进先出的线性结构。\n\n## 操作\n\npush 和 pop 操作栈顶。\n".encode()
 
 
+COURSE_PACKET = REPOSITORY_ROOT / "backend/tests/fixtures/course"
+
+
 def test_course_import_command_executes_and_is_repeatable(migrated_database, tmp_path):
     seed_course_data(migrated_database)
     environment = {**os.environ, "CAPSTONE_DATA_DIR": str(tmp_path)}
     for expected in ("新增 3 份，已有 0 份", "新增 0 份，已有 3 份"):
         result = subprocess.run(
-            [sys.executable, "-X", "utf8", "-m", "capstone.import_course"],
+            [
+                sys.executable,
+                "-X",
+                "utf8",
+                "-m",
+                "capstone.import_course",
+                "--directory",
+                str(COURSE_PACKET),
+            ],
             env=environment,
             capture_output=True,
             encoding="utf-8",
@@ -311,8 +322,8 @@ def test_course_import_is_idempotent_attributed_and_can_retry_after_configuratio
 ):
     seed_course_data(migrated_database)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    assert import_course_data(migrated_database, settings) == (3, 0, 0)
-    assert import_course_data(migrated_database, settings) == (0, 3, 0)
+    assert import_course_data(migrated_database, settings, COURSE_PACKET) == (3, 0, 0)
+    assert import_course_data(migrated_database, settings, COURSE_PACKET) == (0, 3, 0)
     with Session(migrated_database) as session:
         document_ids = [str(value) for value in session.scalars(select(Document.id))]
     with TestClient(create_app(settings)) as client:
@@ -324,7 +335,9 @@ def test_course_import_is_idempotent_attributed_and_can_retry_after_configuratio
             assert "原作" in client.get(f"/api/v1/documents/{doc_id}/file").text
     with TestClient(create_app(settings, embedding_service=TestEmbedding())) as client:
         _library, headers = register(client, "second")
-        assert import_course_data(migrated_database, settings, retry_failed=True) == (0, 3, 3)
+        assert import_course_data(
+            migrated_database, settings, COURSE_PACKET, retry_failed=True
+        ) == (0, 3, 3)
         for doc_id in document_ids:
             wait_document(client, doc_id, "ready")
             assert client.delete(f"/api/v1/documents/{doc_id}", headers=headers).status_code == 403

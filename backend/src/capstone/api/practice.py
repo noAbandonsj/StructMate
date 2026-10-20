@@ -1,8 +1,8 @@
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import func, or_, select
 
 from capstone.api.knowledge import PageNumber, PageSize
 from capstone.api.schemas import Page
@@ -13,8 +13,22 @@ from capstone.core.auth import (
     require_csrf,
     require_origin,
 )
-from capstone.core.practice import FeedbackInput, PracticeInput, ReviewInput, SubmitInput
-from capstone.db.models import PracticeItem, PracticeSession, Question, WrongQuestion
+from capstone.core.knowledge import readable_bases
+from capstone.core.practice import (
+    FeedbackInput,
+    PracticeInput,
+    ReviewInput,
+    SubmitInput,
+    SubmitPracticeInput,
+)
+from capstone.db.models import (
+    Document,
+    KnowledgeBase,
+    PracticeItem,
+    PracticeSession,
+    Question,
+    WrongQuestion,
+)
 from capstone.services.performance import performance, selected_points
 from capstone.services.practice import (
     attempt_info,
@@ -26,6 +40,7 @@ from capstone.services.practice import (
     item_info,
     practice_info,
     submit,
+    submit_practice,
     use_hint,
     wrong_info,
 )
@@ -46,6 +61,35 @@ def config(current: AuthenticatedSession, request: Request):
 @router.get("/learning/performance")
 def learning_performance(current: AuthenticatedSession, session: DatabaseSession):
     return performance(session, current.user_id)
+
+
+@router.get("/practice-sessions/materials")
+def materials(
+    current: AuthenticatedSession,
+    session: DatabaseSession,
+    page: PageNumber = 1,
+    page_size: PageSize = 20,
+):
+    predicate = (readable_bases(current.user_id), Document.status == "ready")
+    rows = session.execute(
+        select(Document, KnowledgeBase.kind)
+        .join(KnowledgeBase)
+        .where(*predicate)
+        .order_by(Document.updated_at.desc(), Document.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return {
+        "items": [
+            {"id": str(document.id), "filename": document.filename, "kind": kind}
+            for document, kind in rows
+        ],
+        "total": session.scalar(
+            select(func.count()).select_from(Document).join(KnowledgeBase).where(*predicate)
+        ),
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.post("/practice-sessions", status_code=202, dependencies=writes)
@@ -115,6 +159,18 @@ def practice_items(
     )
 
 
+@router.post("/practice-sessions/{identifier}/submit", status_code=201, dependencies=writes)
+def submit_all(
+    identifier: UUID,
+    data: SubmitPracticeInput,
+    current: AuthenticatedSession,
+    session: DatabaseSession,
+    request: Request,
+):
+    require_csrf(request, current)
+    return submit_practice(session, identifier, current.user_id, data)
+
+
 @router.post("/practice-items/{identifier}/hint", dependencies=writes)
 def hint(
     identifier: UUID, current: AuthenticatedSession, session: DatabaseSession, request: Request
@@ -155,10 +211,18 @@ def wrong_list(
     page_size: PageSize = 20,
     status: Literal["pending", "consolidated"] | None = None,
     knowledge_point_id: UUID | None = None,
+    search: str = Query(default="", max_length=500),
 ):
     predicates = [WrongQuestion.user_id == current.user_id, Question.is_valid.is_(True)]
     if status:
         predicates.append(WrongQuestion.status == status)
+    if search.strip():
+        predicates.append(
+            or_(
+                Question.source_info["topic"].as_string().contains(search.strip(), autoescape=True),
+                Question.content["stem"].as_string().contains(search.strip(), autoescape=True),
+            )
+        )
     if knowledge_point_id:
         predicates.append(
             Question.knowledge_point_id.in_(

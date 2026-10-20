@@ -45,7 +45,13 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
     cutoff = cutoff or utc_now()
     from_date, to_date, start, end = date_range(from_date, to_date, cutoff)
     rows = session.execute(
-        select(Attempt, Question.knowledge_point_id, Question.source_type)
+        select(
+            Attempt,
+            Question.knowledge_point_id,
+            Question.source_type,
+            Question.source_info,
+            Question.content,
+        )
         .join(Question, Question.id == Attempt.question_id)
         .where(
             Attempt.user_id == user_id,
@@ -101,7 +107,8 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
         related = [
             row[0]
             for row in rows
-            if codes[row[1]] == point.code or codes[row[1]].startswith(point.code + ".")
+            if row[1] in codes
+            and (codes[row[1]] == point.code or codes[row[1]].startswith(point.code + "."))
         ]
         independent = [attempt for attempt in related if attempt.category == "first_independent"]
         chapters.append(
@@ -111,6 +118,25 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
                 "attempts": measure(related),
                 "independent": measure(independent),
                 "evidence": "insufficient" if len(independent) < 5 else "sufficient",
+            }
+        )
+    topics = []
+    for topic in sorted({row[3].get("topic") for row in rows if row[3].get("topic")}):
+        related = [row for row in rows if row[3].get("topic") == topic]
+        independent = [row[0] for row in related if row[0].category == "first_independent"]
+        topics.append(
+            {
+                "name": topic,
+                "attempts": measure([row[0] for row in related]),
+                "independent": measure(independent),
+                "error_count": sum(not row[0].is_correct for row in related),
+                "materials": sorted(
+                    {
+                        doc["filename"]
+                        for row in related
+                        for doc in row[3].get("reference_documents", [])
+                    }
+                ),
             }
         )
     active_days = {attempt.created_at.astimezone(SHANGHAI).date() for attempt in attempts}
@@ -133,6 +159,11 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
         },
         "hinted_attempt_count": sum(attempt.hinted for attempt in attempts),
         "knowledge_points": chapters,
+        "topics": topics,
+        "question_types": {
+            kind: measure([row[0] for row in rows if row[4]["type"] == kind])
+            for kind in ("single_choice", "true_false")
+        },
         "learning": {
             "asked_questions": len(questions),
             "completed_answers": len(answers) - insufficient_count,

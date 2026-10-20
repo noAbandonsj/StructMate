@@ -27,6 +27,13 @@ from capstone.services import practice as practice_service
 
 
 def create(client, headers, key="practice-1", **settings):
+    if (
+        settings.get("question_source") == "ai"
+        and not settings.get("knowledge_point_ids")
+        and not settings.get("document_ids")
+        and "topic" not in settings
+    ):
+        settings["topic"] = "数据结构概念辨析"
     response = client.post(
         "/api/v1/practice-sessions", headers=headers, json={"client_request_id": key, **settings}
     )
@@ -310,8 +317,12 @@ def test_ai_unconfigured_preserves_mode_and_bank_does_not_require_models(bank_da
         assert create(client, headers, "bank", question_source="bank")["status"] == "ready"
 
 
+@pytest.mark.parametrize(
+    ("mode", "strategy"),
+    [("chapter", "不按历史正确率改变选题重点"), ("adaptive", "优先巩固样本足够且正确率偏低")],
+)
 def test_ai_concept_questions_accept_structure_without_template_verification(
-    bank_database, tmp_path
+    bank_database, tmp_path, mode, strategy
 ):
     with Session(bank_database) as session:
         point = str(
@@ -324,6 +335,9 @@ def test_ai_concept_questions_accept_structure_without_template_verification(
         available = True
 
         def stream(self, messages, cancelled):
+            requirements = json.loads(messages[1]["content"].split("\n待复核草稿：")[0])
+            assert "mode" not in requirements
+            assert "围绕本次学习目标出题" in requirements["strategy"]
             yield json.dumps(
                 {
                     "items": [
@@ -350,7 +364,7 @@ def test_ai_concept_questions_accept_structure_without_template_verification(
     with TestClient(create_app(settings, generation_service=ConceptGeneration())) as client:
         _, headers = register(client)
         practice = create(
-            client, headers, question_source="ai", count=1, knowledge_point_ids=[point]
+            client, headers, question_source="ai", mode=mode, count=1, knowledge_point_ids=[point]
         )
         wait_practice(client, practice["id"])
         item = items(client, practice["id"])[0]
@@ -362,6 +376,7 @@ def test_ai_concept_questions_accept_structure_without_template_verification(
             headers,
             "same-generated-question",
             question_source="ai",
+            mode=mode,
             count=1,
             knowledge_point_ids=[point],
         )

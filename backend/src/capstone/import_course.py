@@ -10,7 +10,7 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from capstone.core.errors import ApiError
-from capstone.core.settings import REPOSITORY_ROOT, Settings
+from capstone.core.settings import Settings
 from capstone.db.models import Document, DocumentTask, KnowledgeBase, KnowledgePoint
 from capstone.db.session import create_database_engine, write_transaction
 from capstone.seed import COURSE_CODE
@@ -21,7 +21,7 @@ from capstone.services.storage import BlobStore, validate_upload
 def import_course_data(
     engine: Engine,
     settings: Settings,
-    content_directory: Path = REPOSITORY_ROOT / "content",
+    content_directory: Path,
     *,
     retry_failed: bool = False,
     restore_deleted: bool = False,
@@ -134,12 +134,18 @@ def import_course_data(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="导入已核对来源的课程笔记")
+    parser = argparse.ArgumentParser(description="导入管理员指定的课程内容包（无内置学习资料）")
+    parser.add_argument(
+        "--directory",
+        type=Path,
+        required=True,
+        help="包含 manifest.json 与 sources.json 的内容包目录",
+    )
     parser.add_argument("--retry-failed", action="store_true", help="重新处理既有失败的课程资料")
     parser.add_argument(
         "--restore-deleted",
         action="store_true",
-        help="显式恢复已移除的预置资料（登记新记录，保留历史）",
+        help="显式恢复内容包中已移除的资料（登记新记录，保留历史）",
     )
     arguments = parser.parse_args()
     settings = Settings()
@@ -148,6 +154,7 @@ def main() -> int:
         added, skipped, retried = import_course_data(
             engine,
             settings,
+            arguments.directory,
             retry_failed=arguments.retry_failed,
             restore_deleted=arguments.restore_deleted,
         )

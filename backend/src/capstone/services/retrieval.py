@@ -16,6 +16,43 @@ def document_predicate(user_id: UUID, scope: str, document_ids: list[str]):
     return predicates
 
 
+def document_excerpts(factory, user_id, document_ids):
+    """Read bounded current excerpts from each explicitly selected ready document."""
+    result = []
+    with factory() as session:
+        for identifier in sorted(set(document_ids)):
+            rows = session.execute(
+                select(DocumentChunk, Document)
+                .join(Document)
+                .join(KnowledgeBase)
+                .where(
+                    *document_predicate(user_id, "combined", [identifier]),
+                    DocumentChunk.index_revision == Document.index_revision,
+                )
+                .order_by(DocumentChunk.position)
+                .limit(3)
+            ).all()
+            for chunk, document in rows:
+                result.append(citation_info(chunk, document, len(result) + 1))
+    return result
+
+
+def citation_info(chunk, document, number):
+    return {
+        "number": number,
+        "document_id": str(document.id),
+        "chunk_id": str(chunk.id),
+        "filename": document.filename,
+        "knowledge_point_id": str(chunk.knowledge_point_id) if chunk.knowledge_point_id else None,
+        "page_number": chunk.page_number,
+        "heading": chunk.heading,
+        "line_start": chunk.line_start,
+        "line_end": chunk.line_end,
+        "text": chunk.text[:3000],
+        "source_info": document.source_info,
+    }
+
+
 def retrieve(factory, embedding, vectors, settings, user_id, scope, document_ids, query):
     predicates = document_predicate(user_id, scope, document_ids)
     with factory() as session:

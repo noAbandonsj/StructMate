@@ -14,12 +14,13 @@ function safeLink(value: string) { try { return ['https:', 'http:'].includes(new
     <div class="section-heading"><h1>错题本</h1><button :disabled="state.loading" @click="reload()">刷新</button></div>
     <p class="intro-copy">错误自动收录，复习保留历次记录。不同上海日期连续两次答对可标记该题已巩固，再次答错会回到待复习。</p>
     <p v-if="state.error" class="form-error" role="alert">{{ state.error }}</p>
-    <div class="wrong-filters"><label>复习状态<select v-model="state.status" @change="state.page = 1; reload()"><option value="pending">待复习</option><option value="consolidated">已巩固</option><option value="">全部</option></select></label><label>知识点<select v-model="state.point" @change="state.page = 1; reload()"><option value="">全部知识点</option><option v-for="point in state.points" :key="point.id" :value="point.id">{{ point.name }}</option></select></label><button class="primary-button" :disabled="state.busy || !state.checked.length" @click="start(state.checked)">复习所选（{{ state.checked.length }}）</button></div>
+    <div class="wrong-filters"><label>复习状态<select v-model="state.status" @change="state.page = 1; reload()"><option value="pending">待复习</option><option value="consolidated">已巩固</option><option value="">全部</option></select></label><label>搜索主题或题目<input type="search" v-model="state.search" maxlength="500" placeholder="例如：循环队列" @change="state.page = 1; reload()"></label><button class="primary-button" :disabled="state.busy || !state.checked.length" @click="start(state.checked)">复习所选（{{ state.checked.length }}）</button></div>
     <div class="wrong-layout">
       <div>
         <p v-if="state.loading && !state.items.length">正在读取错题…</p><p v-else-if="state.error && !state.items.length" class="notice">暂时无法读取错题，请刷新重试。</p><p v-else-if="!state.items.length" class="notice">当前筛选没有错题，可以去练习中心开始一组练习。</p>
         <article v-for="item in state.items" :key="item.id" class="wrong-card">
           <label><input type="checkbox" :value="item.id" v-model="state.checked">选择复习</label><RouterLink :to="'/wrong/' + item.id"><h2>{{ item.stem }}</h2></RouterLink>
+          <p v-if="item.topic" class="field-help">练习主题：{{ item.topic }}</p>
           <p class="field-help">{{ item.source_type === 'ai' ? 'AI 题 · 参考答案' : '核验题库' }} · {{ item.status === 'consolidated' ? '该题已巩固' : '待复习' }} · {{ item.error_count }} 次错误 / {{ item.attempt_count }} 次作答</p>
           <button :disabled="state.busy" @click="start([item.id])">重做这道题</button>
         </article>

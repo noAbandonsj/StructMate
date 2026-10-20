@@ -1,0 +1,102 @@
+[
+  {
+    "id": "ods-list",
+    "title": "1.2 Interfaces",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/1_2_Interfaces.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "ods-array",
+    "title": "2. Array-Based Lists",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/2_Array_Based_Lists.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "ods-array-stack",
+    "title": "2.1 ArrayStack",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/2_1_ArrayStack_Fast_Stack_O.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "ods-linked",
+    "title": "3. Linked Lists",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/3_Linked_Lists.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "ods-single",
+    "title": "3.1 SLList",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/3_1_SLList_Singly_Linked_Li.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "ods-array-queue",
+    "title": "2.3 ArrayQueue",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/2_3_ArrayQueue_Array_Based_.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "ods-tree",
+    "title": "6. Binary Trees",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/6_Binary_Trees.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "ods-tree-algorithms",
+    "title": "6.1 BinaryTree",
+    "author": "Pat Morin",
+    "work": "Open Data Structures (in pseudocode)",
+    "url": "https://opendatastructures.org/ods-python/6_1_BinaryTree_Basic_Binary.html",
+    "license": "CC-BY-2.5-CA",
+    "license_url": "https://creativecommons.org/licenses/by/2.5/ca/",
+    "permission_evidence_url": "https://opendatastructures.org/",
+    "checked_on": "2026-10-14"
+  },
+  {
+    "id": "opendsa-traversals",
+    "title": "Binary Tree Traversals",
+    "author": "Cliff Shaffer / OpenDSA Project Contributors",
+    "url": "https://github.com/OpenDSA/OpenDSA/blob/master/RST/en/Binary/BinaryTreeTraversal.rst",
+    "license": "MIT",
+    "license_url": "https://github.com/OpenDSA/OpenDSA/blob/master/MIT-license.txt",
+    "permission_evidence_url": "https://raw.githubusercontent.com/OpenDSA/OpenDSA/master/RST/en/Binary/BinaryTreeTraversal.rst",
+    "copyright_notice": "Copyright (c) 2012-2020 by the OpenDSA Project Contributors",
+    "local_notice": "licenses/opendsa-MIT.txt",
+    "checked_on": "2026-10-14"
+  }
+]

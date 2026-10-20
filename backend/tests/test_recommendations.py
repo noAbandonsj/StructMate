@@ -16,11 +16,21 @@ from capstone.db.models import Document, DocumentChunk, KnowledgePoint, Question
 from capstone.main import create_app
 from capstone.manage_resources import import_resources
 
+RESOURCE_PACKET = REPOSITORY_ROOT / "backend/tests/fixtures/resources.json"
+
 
 def test_resource_maintainer_command_executes_without_a_model(bank_database, tmp_path):
     for expected in ("新增 6，更新 0，未变 0", "新增 0，更新 0，未变 6"):
         result = subprocess.run(
-            [sys.executable, "-X", "utf8", "-m", "capstone.manage_resources"],
+            [
+                sys.executable,
+                "-X",
+                "utf8",
+                "-m",
+                "capstone.manage_resources",
+                "--file",
+                str(RESOURCE_PACKET),
+            ],
             env={**os.environ, "CAPSTONE_DATA_DIR": str(tmp_path)},
             capture_output=True,
             encoding="utf-8",
@@ -31,9 +41,9 @@ def test_resource_maintainer_command_executes_without_a_model(bank_database, tmp
 
 
 def test_resources_import_is_atomic_idempotent_and_can_deactivate(bank_database, tmp_path):
-    assert import_resources(bank_database) == (6, 0, 0)
-    assert import_resources(bank_database) == (0, 0, 6)
-    packet = json.loads((REPOSITORY_ROOT / "content/resources.json").read_text(encoding="utf-8"))
+    assert import_resources(bank_database, RESOURCE_PACKET) == (6, 0, 0)
+    assert import_resources(bank_database, RESOURCE_PACKET) == (0, 0, 6)
+    packet = json.loads(RESOURCE_PACKET.read_text(encoding="utf-8"))
     packet[0]["title"] = "维护后的标题"
     packet[0]["is_active"] = False
     path = tmp_path / "resources.json"
@@ -54,7 +64,7 @@ def test_resources_import_is_atomic_idempotent_and_can_deactivate(bank_database,
 
 
 def test_recommendation_scope_difficulty_and_valid_wrong_reason(bank_database, tmp_path):
-    import_resources(bank_database)
+    import_resources(bank_database, RESOURCE_PACKET)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)

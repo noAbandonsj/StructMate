@@ -10,6 +10,8 @@ export interface Stats {
   from_date: string; to_date: string; time_zone: string; as_of: string
   attempts: Measure; categories: Record<Category, Measure>; sources: Record<'bank' | 'ai', Measure>
   hinted_attempt_count: number
+  topics?: { name: string; attempts: Measure; independent: Measure; error_count: number; materials: string[] }[]
+  question_types?: Record<'single_choice' | 'true_false', Measure>
   knowledge_points: { knowledge_point_id: string; name: string; attempts: Measure; independent: Measure; evidence: string }[]
   learning: { asked_questions: number; completed_answers: number; insufficient_materials?: number; active_days: number; conversation_count: number }
   wrong_questions: { new_in_range: number; current_pending: number }; basis: string

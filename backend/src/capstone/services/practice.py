@@ -8,9 +8,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 
 from capstone.core.errors import ApiError
+from capstone.core.practice import SubmitInput
 from capstone.db.models import (
     Attempt,
     Document,
+    KnowledgePoint,
     PracticeItem,
     PracticeSession,
     Question,
@@ -19,6 +21,7 @@ from capstone.db.models import (
 )
 from capstone.db.session import write_transaction
 from capstone.services.conversations import get_conversation
+from capstone.services.documents import get_document
 from capstone.services.performance import performance, selected_points
 
 
@@ -60,7 +63,9 @@ def snapshot(question):
         {
             **question.content,
             "source_type": question.source_type,
-            "knowledge_point_id": str(question.knowledge_point_id),
+            "knowledge_point_id": str(question.knowledge_point_id)
+            if question.knowledge_point_id
+            else None,
             "difficulty": question.difficulty,
             "source_info": question.source_info,
         }
@@ -101,15 +106,45 @@ def existing_request(session, user_id, request_id, digest):
     return previous
 
 
+def reference_documents(session, user_id, identifiers):
+    result = []
+    for identifier in sorted(set(identifiers), key=str):
+        document = get_document(session, identifier, user_id)
+        if document.status != "ready":
+            raise ApiError(
+                409, "PRACTICE_DOCUMENT_NOT_READY", "所选参考资料已删除或尚未就绪，请重新选择。"
+            )
+        result.append(
+            {
+                "id": str(document.id),
+                "filename": document.filename,
+                "index_revision": document.index_revision,
+                "content_hash": document.content_hash,
+            }
+        )
+    return result
+
+
 def create_practice(session, user_id, data, generation_available):
     settings = data.model_dump(mode="json", exclude={"client_request_id"})
     settings["knowledge_point_ids"] = sorted(set(settings["knowledge_point_ids"]))
-    digest = request_digest(settings)
+    settings["document_ids"] = sorted(set(settings["document_ids"]))
+    digest_settings = (
+        settings
+        if data.topic or data.document_ids
+        else {key: value for key, value in settings.items() if key not in {"topic", "document_ids"}}
+    )
+    digest = request_digest(digest_settings)
     with write_transaction(session):
         if previous := existing_request(session, user_id, data.client_request_id, digest):
             return previous, False
         if data.source_conversation_id:
             get_conversation(session, data.source_conversation_id, user_id)
+        references = reference_documents(session, user_id, data.document_ids)
+        settings["reference_documents"] = references
+        settings["topic_from_materials"] = not bool(settings["topic"]) and bool(references)
+        if not settings["topic"] and references:
+            settings["topic"] = "、".join(item["filename"] for item in references)[:500]
         points = selected_points(session, data.knowledge_point_ids)
         if not set(data.knowledge_point_ids).issubset({point.id for point in points}):
             raise ApiError(422, "KNOWLEDGE_POINT_INVALID", "所选知识点不存在。")
@@ -127,9 +162,7 @@ def create_practice(session, user_id, data, generation_available):
         if data.question_source == "ai":
             if not generation_available:
                 practice.status, practice.error_code = "failed", "GENERATION_NOT_CONFIGURED"
-                practice.error_message = (
-                    "生成模型尚未接通。设置已保留，可配置后重试，或主动切换题库。"
-                )
+                practice.error_message = "生成模型尚未接通。设置已保留，请联系管理员配置后重试。"
             return practice, generation_available
         questions = session.scalars(
             select(Question).where(
@@ -194,78 +227,127 @@ def create_review(session, user_id, data):
 
 def submit(session, identifier, user_id, data):
     with write_transaction(session):
-        item = get_item(session, identifier, user_id)
-        previous = session.scalar(select(Attempt).where(Attempt.practice_item_id == item.id))
-        if previous:
-            if previous.answer != data.answer:
-                raise ApiError(409, "ALREADY_SUBMITTED", "这道题已提交，请查看原结果。")
-            return previous
-        question = session.get(Question, item.question_id)
-        if not question.is_valid:
-            raise ApiError(409, "QUESTION_INVALID", "此题已确认有误，不计分，请继续其他题目。")
-        if data.answer not in {option["key"] for option in item.snapshot["options"]}:
-            raise ApiError(422, "ANSWER_INVALID", "请选择题目提供的选项。")
-        practice = get_practice(session, item.practice_session_id, user_id)
-        seen = session.scalar(
-            select(Attempt.id)
-            .where(Attempt.user_id == user_id, Attempt.question_id == question.id)
-            .limit(1)
+        return _submit(session, identifier, user_id, data)
+
+
+def _submit(session, identifier, user_id, data):
+    item = get_item(session, identifier, user_id)
+    previous = session.scalar(select(Attempt).where(Attempt.practice_item_id == item.id))
+    if previous:
+        if previous.answer != data.answer:
+            raise ApiError(409, "ALREADY_SUBMITTED", "这道题已提交，请查看原结果。")
+        return previous
+    question = session.get(Question, item.question_id)
+    if not question.is_valid:
+        raise ApiError(409, "QUESTION_INVALID", "此题已确认有误，不计分，请继续其他题目。")
+    if data.answer not in {option["key"] for option in item.snapshot["options"]}:
+        raise ApiError(422, "ANSWER_INVALID", "请选择题目提供的选项。")
+    practice = get_practice(session, item.practice_session_id, user_id)
+    seen = session.scalar(
+        select(Attempt.id)
+        .where(Attempt.user_id == user_id, Attempt.question_id == question.id)
+        .limit(1)
+    )
+    category = (
+        "review"
+        if practice.mode == "review"
+        else "repeat"
+        if seen
+        else "first_hinted"
+        if item.hinted_at
+        else "first_independent"
+    )
+    now = utc_now()
+    attempt = Attempt(
+        user_id=user_id,
+        practice_item_id=item.id,
+        question_id=question.id,
+        request_id=data.client_request_id,
+        answer=data.answer,
+        is_correct=data.answer == item.snapshot["answer"],
+        hinted=item.hinted_at is not None,
+        category=category,
+        created_at=now,
+    )
+    session.add(attempt)
+    wrong = session.scalar(
+        select(WrongQuestion).where(
+            WrongQuestion.user_id == user_id, WrongQuestion.question_id == question.id
         )
-        category = (
-            "review"
-            if practice.mode == "review"
-            else "repeat"
-            if seen
-            else "first_hinted"
-            if item.hinted_at
-            else "first_independent"
+    )
+    if not attempt.is_correct:
+        if wrong is None:
+            wrong = WrongQuestion(user_id=user_id, question_id=question.id)
+            session.add(wrong)
+        wrong.status, wrong.correct_days, wrong.last_correct_date = "pending", 0, None
+    elif wrong is not None:
+        today = now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+        if wrong.last_correct_date != today:
+            wrong.correct_days = min(2, wrong.correct_days + 1)
+            wrong.last_correct_date = today
+        wrong.status = "consolidated" if wrong.correct_days >= 2 else "pending"
+    if wrong:
+        wrong.updated_at = now
+    session.flush()
+    remaining = session.scalar(
+        select(func.count())
+        .select_from(PracticeItem)
+        .join(Question)
+        .outerjoin(Attempt, Attempt.practice_item_id == PracticeItem.id)
+        .where(
+            PracticeItem.practice_session_id == practice.id,
+            Question.is_valid.is_(True),
+            Attempt.id.is_(None),
         )
-        now = utc_now()
-        attempt = Attempt(
-            user_id=user_id,
-            practice_item_id=item.id,
-            question_id=question.id,
-            request_id=data.client_request_id,
-            answer=data.answer,
-            is_correct=data.answer == item.snapshot["answer"],
-            hinted=item.hinted_at is not None,
-            category=category,
-            created_at=now,
-        )
-        session.add(attempt)
-        wrong = session.scalar(
-            select(WrongQuestion).where(
-                WrongQuestion.user_id == user_id, WrongQuestion.question_id == question.id
-            )
-        )
-        if not attempt.is_correct:
-            if wrong is None:
-                wrong = WrongQuestion(user_id=user_id, question_id=question.id)
-                session.add(wrong)
-            wrong.status, wrong.correct_days, wrong.last_correct_date = "pending", 0, None
-        elif wrong is not None:
-            today = now.astimezone(ZoneInfo("Asia/Shanghai")).date()
-            if wrong.last_correct_date != today:
-                wrong.correct_days = min(2, wrong.correct_days + 1)
-                wrong.last_correct_date = today
-            wrong.status = "consolidated" if wrong.correct_days >= 2 else "pending"
-        if wrong:
-            wrong.updated_at = now
-        session.flush()
-        remaining = session.scalar(
-            select(func.count())
-            .select_from(PracticeItem)
-            .join(Question)
-            .outerjoin(Attempt, Attempt.practice_item_id == PracticeItem.id)
-            .where(
-                PracticeItem.practice_session_id == practice.id,
-                Question.is_valid.is_(True),
-                Attempt.id.is_(None),
-            )
-        )
-        if remaining == 0:
-            practice.status, practice.completed_at = "completed", now
+    )
+    if remaining == 0:
+        practice.status, practice.completed_at = "completed", now
     return attempt
+
+
+def submit_practice(session, identifier, user_id, data):
+    with write_transaction(session):
+        practice = get_practice(session, identifier, user_id)
+        if practice.status not in {"ready", "completed"}:
+            raise ApiError(409, "PRACTICE_NOT_READY", "本组练习尚未就绪，暂不能提交。")
+        items = session.scalars(
+            select(PracticeItem)
+            .join(Question)
+            .where(PracticeItem.practice_session_id == practice.id, Question.is_valid.is_(True))
+            .order_by(PracticeItem.position)
+        ).all()
+        answers = {item.practice_item_id: item.answer for item in data.answers}
+        if not items or set(answers) != {item.id for item in items}:
+            raise ApiError(422, "PRACTICE_ANSWERS_INCOMPLETE", "请完成本组全部有效题目后统一提交。")
+        # Validate every answer before writing any attempts or wrong-question state.
+        for item in items:
+            if answers[item.id] not in {option["key"] for option in item.snapshot["options"]}:
+                raise ApiError(422, "ANSWER_INVALID", "部分答案无效，请检查后重新提交。")
+            previous = session.scalar(select(Attempt).where(Attempt.practice_item_id == item.id))
+            if previous is not None and previous.answer != answers[item.id]:
+                raise ApiError(
+                    409, "ALREADY_SUBMITTED", "本组包含已提交的答案，请刷新后查看原结果。"
+                )
+        for item in items:
+            _submit(
+                session,
+                item.id,
+                user_id,
+                SubmitInput(client_request_id=data.client_request_id, answer=answers[item.id]),
+            )
+        if practice.status != "completed":
+            practice.status, practice.completed_at = "completed", utc_now()
+        return {
+            "practice": practice_info(session, practice),
+            "items": [
+                item_info(session, item)
+                for item in session.scalars(
+                    select(PracticeItem)
+                    .where(PracticeItem.practice_session_id == practice.id)
+                    .order_by(PracticeItem.position)
+                )
+            ],
+        }
 
 
 def use_hint(session, identifier, user_id):
@@ -352,7 +434,23 @@ def practice_info(session, practice):
     ).all()
     attempts = [attempt for valid, attempt in rows if valid and attempt and attempt.is_valid]
     total = sum(valid for valid, _ in rows)
+    title = practice.settings.get("topic", "")
+    if not title:
+        identifiers = practice.settings.get("knowledge_point_ids", [])
+        names = (
+            session.scalars(
+                select(KnowledgePoint.name).where(
+                    KnowledgePoint.id.in_([UUID(value) for value in identifiers])
+                )
+            ).all()
+            if identifiers
+            else []
+        )
+        title = "、".join(names) or (
+            "错题复习" if practice.mode == "review" else "数据结构综合练习"
+        )
     return {
+        "title": title,
         "id": practice.id,
         "mode": practice.mode,
         "question_source": practice.question_source,
@@ -382,6 +480,7 @@ def wrong_info(session, wrong, include_history=False):
         "id": wrong.id,
         "question_id": question.id,
         "knowledge_point_id": question.knowledge_point_id,
+        "topic": question.source_info.get("topic", ""),
         "stem": question.content["stem"],
         "source_type": question.source_type,
         "status": wrong.status,

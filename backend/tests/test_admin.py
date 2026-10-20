@@ -28,6 +28,9 @@ from capstone.services.storage import BlobStore
 ROOT = "/api/v1/admin/course/documents"
 
 
+COURSE_PACKET = REPOSITORY_ROOT / "backend/tests/fixtures/course"
+
+
 def role(engine, username, value):
     with Session(engine) as session, write_transaction(session):
         session.scalar(select(User).where(User.username == username)).role = value
@@ -273,19 +276,25 @@ def test_upload_validation_csrf_busy_and_model_failure_retry(migrated_database, 
 def test_deleted_presets_stay_removed_until_explicit_restore(migrated_database, tmp_path):
     seed_course_data(migrated_database)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    assert import_course_data(migrated_database, settings) == (3, 0, 0)
+    assert import_course_data(migrated_database, settings, COURSE_PACKET) == (3, 0, 0)
     with TestClient(create_app(settings)) as admin:
         _, headers = register(admin)
         role(migrated_database, "student", "admin")
         identifier = admin.get(ROOT).json()["items"][0]["id"]
         assert admin.delete(ROOT + f"/{identifier}", headers=headers).status_code == 202
-        assert import_course_data(migrated_database, settings) == (0, 3, 0)
-        _, _, retries = import_course_data(migrated_database, settings, retry_failed=True)
+        assert import_course_data(migrated_database, settings, COURSE_PACKET) == (0, 3, 0)
+        _, _, retries = import_course_data(
+            migrated_database, settings, COURSE_PACKET, retry_failed=True
+        )
         assert retries <= 2
         with Session(migrated_database) as session:
             assert session.get(Document, UUID(identifier)).status == "deleted"
-        assert import_course_data(migrated_database, settings, restore_deleted=True) == (1, 2, 0)
-        assert import_course_data(migrated_database, settings, restore_deleted=True) == (0, 3, 0)
+        assert import_course_data(
+            migrated_database, settings, COURSE_PACKET, restore_deleted=True
+        ) == (1, 2, 0)
+        assert import_course_data(
+            migrated_database, settings, COURSE_PACKET, restore_deleted=True
+        ) == (0, 3, 0)
         with Session(migrated_database) as session:
             assert (
                 session.scalar(
@@ -321,9 +330,9 @@ def test_updated_preset_import_does_not_race_course_deletion(
 ):
     seed_course_data(migrated_database)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    assert import_course_data(migrated_database, settings) == (3, 0, 0)
+    assert import_course_data(migrated_database, settings, COURSE_PACKET) == (3, 0, 0)
     packet = tmp_path / "packet"
-    shutil.copytree(REPOSITORY_ROOT / "content", packet)
+    shutil.copytree(COURSE_PACKET, packet)
     manifest = json.loads((packet / "manifest.json").read_text(encoding="utf-8"))
     item = manifest[0]
     file = packet / item["path"]

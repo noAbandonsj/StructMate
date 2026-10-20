@@ -22,8 +22,9 @@ const canStudy = computed(() => readiness.value?.generation_available && readine
     <div class="notice" role="status">
       <template v-if="!readiness">{{ state.loading ? '正在检查学习资料是否就绪…' : '暂时无法确认学习资料状态，请刷新学习记录后重试。' }}</template>
       <template v-else>
-        <span v-if="!readiness.generation_available || !readiness.embedding_available">答疑服务尚未就绪，可先在练习中心选择题库练习。资料仍可上传和预览。</span>
-        <span v-else-if="!readiness.ready_document_count">暂时没有可用于答疑的资料。可先做题库练习，或上传自己的笔记。</span>
+        <span v-if="!readiness.generation_available">AI 答疑与出题暂不可用，请联系管理员配置生成模型。资料仍可上传和预览。</span>
+        <span v-else-if="!readiness.embedding_available">资料答疑尚未就绪，可先使用实时 AI 练习，或上传自己的笔记。</span>
+        <span v-else-if="!readiness.ready_document_count">暂时没有可用于答疑的资料。可先使用实时 AI 练习，或上传自己的笔记。</span>
         <span v-else>已有 {{ readiness.ready_document_count }} 份资料可用于答疑。</span>
         <span v-if="readiness.course_ready_count">课程资料已就绪 {{ readiness.course_ready_count }} 份。</span>
         <span v-else>课程资料尚未就绪，待维护者处理。</span>

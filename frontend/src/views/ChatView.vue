@@ -22,7 +22,7 @@ watch(selected, () => { citationVersion++; citation.value = null; citationError.
 watch(() => state.conversation?.title, value => { title.value = value ?? '' })
 const available = computed(() => state.config?.generation_available && state.config.embedding_available)
 const noReadyMaterials = computed(() => state.config?.ready_document_count === 0)
-const practicePoint = computed(() => state.conversation?.knowledge_point_id || [...state.messages].reverse().flatMap(message => message.citations).find(value => value.knowledge_point_id)?.knowledge_point_id)
+const practiceTopic = computed(() => ([...state.messages].reverse().find(message => message.role === 'user')?.content || state.conversation?.title || '').slice(0, 500))
 async function start() {
   const documents = typeof route.query.document === 'string' ? [route.query.document] : []
   const point = typeof route.query.point === 'string' ? route.query.point : undefined
@@ -79,11 +79,11 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
           </details>
           <div v-if="noReadyMaterials" class="notice" role="status">
             当前资料范围没有可用于学习的资料，暂不能提问。可在会话设置中切换资料范围，
-            <RouterLink to="/knowledge">上传自己的笔记</RouterLink>，或<RouterLink to="/practice">前往练习中心选择题库练习</RouterLink>。
+            <RouterLink to="/knowledge">上传自己的笔记</RouterLink>，或<RouterLink to="/practice">前往练习中心使用实时 AI 出题</RouterLink>。
             <button type="button" class="text-button" :disabled="state.loading" @click="reload()">重新检查资料</button>
           </div>
           <div class="message-history" aria-label="会话记录">
-            <RouterLink :to="{ path: '/practice', query: { conversation: selected, point: practicePoint || undefined } }">{{ practicePoint ? '练习这个知识点' : '进入练习中心' }}</RouterLink>
+            <RouterLink :to="{ path: '/practice', query: { conversation: selected, topic: practiceTopic || undefined } }">围绕本次对话练习</RouterLink>
             <button v-if="state.historyPage > 1" @click="older()" :disabled="state.loading">查看更早消息</button>
             <p v-if="!state.messages.length" class="field-help">可以问：“栈和队列有什么区别？”或“用例子解释二叉树遍历”。</p>
             <article v-for="(message, index) in state.messages" :key="message.id" class="chat-message" :class="message.role">
@@ -95,7 +95,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
               <p v-if="message.status === 'cancelled'" class="field-help">回答已取消，已生成内容保留。</p>
               <p v-if="message.answer_outcome === 'insufficient_materials'" class="field-help">资料不足 · 未计入有效答疑，也不参与新的学习总结。可调整资料范围或补充资料后重新提问。</p>
               <div v-if="message.citations.length" class="citation-links"><span>检索依据：</span><button v-for="value in message.citations" :key="value.number" class="text-button" @click="showCitation(value)">[{{ value.number }}] {{ value.filename }}{{ value.source_deleted ? '（来源已删除）' : '' }}</button></div>
-              <RouterLink v-if="message.citations.find(value => value.knowledge_point_id)" :to="{ path: '/practice', query: { conversation: selected, point: message.citations.find(value => value.knowledge_point_id)?.knowledge_point_id || undefined } }">练习引用的知识点</RouterLink>
+              <RouterLink v-if="message.citations.length" :to="{ path: '/practice', query: { conversation: selected, document: message.citations[0]?.document_id, topic: practiceTopic || undefined } }">依据引用资料练习</RouterLink>
               <button v-if="index === state.messages.length - 1 && ['failed','cancelled'].includes(message.status)" :disabled="state.busy || !!active || !available" @click="retry(message.id)">重试这个问题</button>
             </article>
           </div>
@@ -110,7 +110,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
             <p v-if="state.conversation.archived" class="field-help">会话已归档，恢复后可继续提问。</p>
           </form>
           <SummaryPanel :id="selected" :summary="state.summary" :can-generate="!!state.config?.generation_available" :busy="state.busy" :loading="state.loading || state.summaryLoading" :error="state.summaryError" @generate="generateSummary" @refresh="refreshSummary" />
-          <details class="chat-recommendations"><summary>阅读相关资料</summary><RecommendationPanel :point-id="practicePoint || undefined" /></details>
+          <details class="chat-recommendations"><summary>阅读相关资料</summary><RecommendationPanel  /></details>
         </template>
       </div>
       <aside v-if="citation" ref="citationPane" class="citation-pane" aria-label="引用原文" tabindex="-1" @keydown.esc="closeCitation">

@@ -9,17 +9,19 @@ from capstone.core.settings import REPOSITORY_ROOT
 from capstone.seed import KNOWLEDGE_POINTS
 
 CONTENT = REPOSITORY_ROOT / "content"
+COURSE_PACKET = REPOSITORY_ROOT / "backend/tests/fixtures/course"
 
 
 def load(name: str) -> list[dict]:
-    return json.loads((CONTENT / name).read_text(encoding="utf-8"))
+    directory = COURSE_PACKET if name == "manifest.json" else CONTENT
+    return json.loads((directory / name).read_text(encoding="utf-8"))
 
 
 def evidence_exists(evidence: dict) -> bool:
     document = next(
         item for item in load("manifest.json") if item["code"] == evidence["document_code"]
     )
-    return "\n## " + evidence["heading"] + "\n" in (CONTENT / document["path"]).read_text(
+    return "\n## " + evidence["heading"] + "\n" in (COURSE_PACKET / document["path"]).read_text(
         encoding="utf-8"
     )
 
@@ -32,8 +34,8 @@ def test_course_files_have_attribution_sources_and_stable_hashes() -> None:
     documents = load("manifest.json")
     assert len(documents) == 3
     for item in documents:
-        path = (CONTENT / item["path"]).resolve()
-        assert path.is_relative_to(CONTENT.resolve())
+        path = (COURSE_PACKET / item["path"]).resolve()
+        assert path.is_relative_to(COURSE_PACKET.resolve())
         text = path.read_text(encoding="utf-8")
         assert sha256(text.encode("utf-8")).hexdigest() == item["sha256"]
         assert item["sha256_format"] == "utf8-lf"

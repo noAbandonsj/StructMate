@@ -45,7 +45,8 @@ def performance(session, user_id, now=None):
         scores = [
             correct
             for identifier, correct in rows
-            if codes[identifier] == point.code or codes[identifier].startswith(point.code + ".")
+            if identifier in codes
+            and (codes[identifier] == point.code or codes[identifier].startswith(point.code + "."))
         ]
         count, correct = len(scores), sum(scores)
         rate = correct / count if count else None

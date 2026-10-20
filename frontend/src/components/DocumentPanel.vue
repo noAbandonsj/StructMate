@@ -132,7 +132,7 @@ function pointName(id: string | null) { return props.points.find(point => point.
     </div>
     <p v-if="state.loading && !state.documents.length" class="notice" role="status">正在读取资料…</p>
     <div v-else-if="!state.documents.length && !state.error" class="document-empty">
-      {{ management ? '没有符合条件的课程资料。可以调整筛选或上传新资料。' : library.is_readonly ? '课程资料尚未导入。' : '还没有资料，选择文件即可开始整理。' }}
+      {{ management ? '没有符合条件的课程资料。可以调整筛选或上传新资料。' : library.is_readonly ? '暂无课程资料，等待管理员上传维护。' : '还没有资料，选择文件即可开始整理。' }}
     </div>
     <ul v-if="state.documents.length" class="document-list">
       <li v-for="document in state.documents" :key="document.id" class="document-row">
@@ -154,6 +154,7 @@ function pointName(id: string | null) { return props.points.find(point => point.
         </div>
         <div class="document-actions">
           <RouterLink v-if="document.status === 'ready'" :to="{ path: '/chat', query: { document: document.id, point: document.knowledge_point_id || undefined } }">学习这份资料</RouterLink>
+          <RouterLink v-if="document.status === 'ready'" :to="{ path: '/practice', query: { document: document.id } }">依据资料练习</RouterLink>
           <a v-if="document.status !== 'deleted'" :href="documentFileUrl(document.id, false, management)" target="_blank" rel="noopener noreferrer">预览</a>
           <a v-if="document.status !== 'deleted'" :href="documentFileUrl(document.id, true, management)" target="_blank" rel="noopener noreferrer">下载</a>
           <button v-if="writable && document.retryable && document.status !== 'deleted'" class="text-button" type="button"

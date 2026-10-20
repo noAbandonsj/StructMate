@@ -192,7 +192,11 @@ def run_evaluation(
                     "评估未执行，不生成实测结果。"
                 )
             seed_course_data(app.state.engine)
-            import_course_data(app.state.engine, runtime_settings)
+            import_course_data(
+                app.state.engine,
+                runtime_settings,
+                REPOSITORY_ROOT / "backend/tests/fixtures/course",
+            )
             app.state.document_worker.notify()
             deadline = time.monotonic() + wait_seconds
             while True:

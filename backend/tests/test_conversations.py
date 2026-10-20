@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from test_documents import ORIGIN, TestEmbedding, register, upload, wait_document
 
-from capstone.core.settings import Settings
+from capstone.core.settings import REPOSITORY_ROOT, Settings
 from capstone.db.models import Conversation, Message
 from capstone.db.session import write_transaction
 from capstone.import_course import import_course_data
@@ -27,6 +27,9 @@ class TestGeneration:
         self.prompts.append(messages)
         yield "按资料，栈后进先出 [资料1]。"
         yield "不存在的编号 [资料999] 应被移除，数组 a[0] 保留。"
+
+
+COURSE_PACKET = REPOSITORY_ROOT / "backend/tests/fixtures/course"
 
 
 def new_conversation(client, headers, **values):
@@ -87,7 +90,7 @@ def test_conversation_permissions_archive_and_unconfigured_models(migrated_datab
 def test_real_retrieval_stream_history_and_deleted_citation(migrated_database, tmp_path):
     seed_course_data(migrated_database)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    import_course_data(migrated_database, settings)
+    import_course_data(migrated_database, settings, COURSE_PACKET)
     generation = TestGeneration()
     with TestClient(
         create_app(settings, embedding_service=TestEmbedding(), generation_service=generation)
@@ -149,7 +152,7 @@ def test_real_retrieval_stream_history_and_deleted_citation(migrated_database, t
 def test_scope_filters_course_explicit_docs_and_stale_revision(migrated_database, tmp_path):
     seed_course_data(migrated_database)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    import_course_data(migrated_database, settings)
+    import_course_data(migrated_database, settings, COURSE_PACKET)
     with TestClient(
         create_app(settings, embedding_service=TestEmbedding(), generation_service=TestGeneration())
     ) as client:

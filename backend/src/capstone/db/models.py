@@ -324,7 +324,7 @@ class Question(Base):
     owner_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
-    knowledge_point_id: Mapped[UUID] = mapped_column(
+    knowledge_point_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("knowledge_points.id", ondelete="RESTRICT"), index=True
     )
     source_type: Mapped[str] = mapped_column(String(8))
