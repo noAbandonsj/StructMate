@@ -65,22 +65,6 @@ def update_conversation(session, identifier, user_id, data):
     with write_transaction(session):
         record = get_conversation(session, identifier, user_id)
         changes = data.model_dump(exclude_unset=True)
-        if any(key in changes for key in ("scope", "document_ids", "chapter_id")):
-            if session.scalar(
-                select(Message.id).where(
-                    Message.conversation_id == identifier, Message.status == "generating"
-                )
-            ):
-                raise ApiError(
-                    409, "CONVERSATION_BUSY", "回答正在生成，请完成或取消后更改资料范围。"
-                )
-            validate_scope(
-                session,
-                user_id,
-                changes.get("scope", record.scope),
-                changes.get("document_ids", record.document_ids),
-                changes.get("chapter_id", record.chapter_id),
-            )
         for key, value in changes.items():
             setattr(record, key, value)
     return record
@@ -160,7 +144,7 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
             raise ApiError(
                 409,
                 "NO_READY_MATERIALS",
-                "当前资料范围没有可用于学习的资料。请切换资料范围、上传笔记，或先做 AI 练习。",
+                "当前资料范围没有可用于学习的资料。请补充就绪资料，或先做 AI 练习。",
             )
         answer = Message(
             conversation_id=identifier,

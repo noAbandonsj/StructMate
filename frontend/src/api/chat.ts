@@ -1,12 +1,13 @@
 import type { Page } from './client'
 import { request } from './client'
 
-export type Scope = 'combined' | 'course' | 'personal'
 export type Intent = 'explain' | 'hint' | 'example'
 export interface Conversation {
-  id: string; title: string; scope: Scope; document_ids: string[]
+  id: string; title: string; scope: 'combined' | 'course' | 'personal'; document_ids: string[]
   chapter_id: string | null; archived: boolean; created_at: string; updated_at: string
 }
+export type ConversationInput = Pick<Conversation, 'document_ids' | 'chapter_id'>
+export type ConversationPatch = Partial<Pick<Conversation, 'title' | 'archived'>>
 export interface Citation {
   number: number; document_id: string; chunk_id: string; filename: string
   page_number: number | null; heading: string | null; line_start: number | null
@@ -43,14 +44,14 @@ const json = (csrf: string, value: unknown, method = 'POST') => ({
 })
 export const config = (signal: AbortSignal, conversationId = '') => request<Config>(
   '/conversations/config' + (conversationId ? '?conversation_id=' + encodeURIComponent(conversationId) : ''), { signal })
-export const list = (page: number, archived: boolean, signal: AbortSignal) =>
-  request<Page<Conversation>>('/conversations?page=' + page + '&archived=' + archived, { signal })
+export const list = (page: number, signal: AbortSignal) =>
+  request<Page<Conversation>>('/conversations?page=' + page, { signal })
 export const detail = (id: string, signal: AbortSignal) => request<Conversation>('/conversations/' + encodeURIComponent(id), { signal })
 export const messages = (id: string, page: number, signal: AbortSignal) =>
   request<Page<Message>>('/conversations/' + encodeURIComponent(id) + '/messages?page=' + page + '&page_size=100', { signal })
-export const create = (csrf: string, value: unknown, signal: AbortSignal) =>
+export const create = (csrf: string, value: ConversationInput, signal: AbortSignal) =>
   request<Conversation>('/conversations', { ...json(csrf, value), signal })
-export const update = (csrf: string, id: string, value: unknown, signal: AbortSignal) =>
+export const update = (csrf: string, id: string, value: ConversationPatch, signal: AbortSignal) =>
   request<Conversation>('/conversations/' + encodeURIComponent(id), { ...json(csrf, value, 'PATCH'), signal })
 export const send = (csrf: string, id: string, content: string, intent: Intent, key: string, signal: AbortSignal) =>
   request<Queued>('/conversations/' + encodeURIComponent(id) + '/messages', { ...json(csrf, { content, intent, client_request_id: key }), signal })

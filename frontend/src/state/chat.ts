@@ -6,7 +6,7 @@ import { readDraft, saveDraft } from './learning-drafts'
 
 export function useChat(selected: Ref<string>) {
   const state = reactive({
-    conversations: [] as api.Conversation[], total: 0, page: 1, archived: false,
+    conversations: [] as api.Conversation[], total: 0, page: 1,
     conversation: null as api.Conversation | null, messages: [] as api.Message[],
     config: null as api.Config | null, loading: false, busy: false, error: '', streamError: '',
     draft: '', intent: 'explain' as api.Intent, historyPage: 1,
@@ -64,7 +64,7 @@ export function useChat(selected: Ref<string>) {
     state.loading = true; state.error = ''
     try {
       const [conversations, config, conversation, summary] = await Promise.all([
-        api.list(state.page, state.archived, signal), api.config(signal, id),
+        api.list(state.page, signal), api.config(signal, id),
         id ? api.detail(id, signal) : Promise.resolve(null),
         id ? api.summary(id, signal) : Promise.resolve(null),
       ])
@@ -118,14 +118,14 @@ export function useChat(selected: Ref<string>) {
     } catch (error) { if (valid(version, account.user.id, id)) await failure(error) }
     finally { if (valid(version, account.user.id, id)) state.busy = false }
   }
-  async function create(scope: api.Scope, documentIds: string[] = [], chapterId?: string) {
-    return mutate((csrf, signal) => api.create(csrf, { scope, document_ids: documentIds, chapter_id: chapterId || null }, signal))
+  async function create(documentIds: string[] = [], chapterId?: string) {
+    return mutate((csrf, signal) => api.create(csrf, { document_ids: documentIds, chapter_id: chapterId || null }, signal))
   }
   async function send() {
     const content = state.draft.trim(), version = epoch, user = authState.account?.user.id, id = selected.value
     if (!content || !id || active.value || state.conversation?.archived) return
     if (state.config?.ready_document_count === 0) {
-      state.error = '当前资料范围没有可用于学习的资料。请切换资料范围、上传笔记，或前往练习中心使用实时 AI 出题。'
+      state.error = '当前资料范围没有可用于学习的资料。请补充就绪资料，或前往练习中心使用实时 AI 出题。'
       return
     }
     if (!pending || pending.content !== content || pending.intent !== state.intent)
@@ -157,10 +157,15 @@ export function useChat(selected: Ref<string>) {
       closeStream?.()
     }
   }
-  async function update(values: Partial<api.Conversation>) {
-    const id = selected.value
+  async function update(values: api.ConversationPatch) {
+    const id = selected.value, version = epoch, user = authState.account?.user.id
     const result = await mutate((csrf, signal) => api.update(csrf, id, values, signal))
-    if (result) { state.conversation = result; await reload() }
+    if (result) {
+      state.conversation = result
+      if (values.archived !== undefined) state.page = 1
+      await reload()
+      if (valid(version, user, id)) return result
+    }
   }
   async function older() {
     if (state.historyPage <= 1 || state.loading) return

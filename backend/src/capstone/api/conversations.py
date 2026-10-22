@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import StreamingResponse
@@ -62,27 +62,14 @@ class ConversationInput(BaseModel):
 class ConversationPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(default=None, min_length=1, max_length=100)
-    scope: Scope = None
-    document_ids: list[UUID] = Field(default=None, max_length=100)
-    chapter_id: UUID | None = None
     archived: bool = None
 
-    @model_validator(mode="after")
-    def reject_null(self):
-        for field in self.model_fields_set - {"chapter_id"}:
-            if getattr(self, field) is None:
-                raise ValueError("设置值不能为空")
-        if "title" in self.model_fields_set and not self.title.strip():
+    @field_validator("title")
+    @classmethod
+    def trim_title(cls, value):
+        if not value.strip():
             raise ValueError("标题不能为空")
-        return self
-
-    def model_dump(self, **kwargs):
-        result = super().model_dump(**kwargs)
-        if "document_ids" in result:
-            result["document_ids"] = [str(identifier) for identifier in self.document_ids]
-        if "title" in result:
-            result["title"] = result["title"].strip()
-        return result
+        return value.strip()
 
 
 class ConversationInfo(BaseModel):

@@ -123,7 +123,7 @@ class ChatRunner:
             if not citations:
                 self._save(
                     identifier,
-                    content="当前资料没有找到足够依据。请补充已就绪资料、切换资料范围或把问题描述得更具体。",
+                    content="当前资料没有找到足够依据。请补充已就绪资料或把问题描述得更具体。",
                     status="completed",
                     outcome="insufficient_materials",
                 )

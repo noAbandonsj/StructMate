@@ -5,13 +5,12 @@ import { useChat } from '../state/chat'
 import SummaryPanel from '../components/SummaryPanel.vue'
 import RecommendationPanel from '../components/RecommendationPanel.vue'
 import MarkdownContent from '../components/MarkdownContent'
-import type { Citation, Scope } from '../api/chat'
+import type { Citation } from '../api/chat'
 import { documentFileUrl, getDocument } from '../api/documents'
 
 const route = useRoute(), router = useRouter()
 const selected = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const { state, active, reload, create, send, retry, cancel, update, older, reconnect, generateSummary, refreshSummary } = useChat(selected)
-const newScope = ref<Scope>('combined')
 const title = ref('')
 const citation = ref<Citation | null>(null)
 const citationError = ref('')
@@ -26,8 +25,13 @@ const practiceRequirements = computed(() => ([...state.messages].reverse().find(
 async function start() {
   const documents = typeof route.query.document === 'string' ? [route.query.document] : []
   const point = typeof route.query.chapter === 'string' ? route.query.chapter : undefined
-  const conversation = await create(newScope.value, documents, point)
+  const conversation = await create(documents, point)
   if (conversation) await router.push('/chat/' + conversation.id)
+}
+async function archive() {
+  if (!state.conversation || active.value) return
+  const result = await update({ archived: !state.conversation.archived })
+  if (result?.archived) await router.push('/chat')
 }
 async function showCitation(value: Citation) {
   const version = ++citationVersion
@@ -52,14 +56,11 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
     <div class="chat-layout" :class="{ 'with-citation': citation }">
       <aside class="conversation-list" aria-label="学习会话">
         <form @submit.prevent="start">
-          <label for="new-scope">新学习的资料范围</label>
-          <select id="new-scope" v-model="newScope"><option value="combined">课程＋我的资料</option><option value="course">仅课程资料</option><option value="personal">仅我的资料</option></select>
-          <p v-if="route.query.document" class="field-help">本次只使用从知识库选择的资料。</p>
           <button class="primary-button" :disabled="state.busy">新建学习</button>
+          <p class="field-help">{{ route.query.document ? '本次使用从知识库选择的资料。' : '默认使用课程资料＋我的学习资料。' }}</p>
         </form>
-        <label class="archive-toggle"><input type="checkbox" v-model="state.archived" @change="state.page = 1; reload()">显示已归档</label>
         <p v-if="state.loading && !state.conversations.length">正在读取会话…</p>
-        <p v-else-if="!state.conversations.length && !state.error" class="field-help">还没有{{ state.archived ? '归档' : '' }}会话。</p>
+        <p v-else-if="!state.conversations.length && !state.error" class="field-help">暂无进行中的会话。</p>
         <RouterLink v-for="conversation in state.conversations" :key="conversation.id" :to="'/chat/' + conversation.id" class="conversation-link" :class="{ selected: selected === conversation.id }">{{ conversation.title }}</RouterLink>
         <div class="document-pagination" v-if="state.total > 20">
           <button :disabled="state.page <= 1 || state.loading" @click="state.page--; reload()">上一页</button>
@@ -70,16 +71,14 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
       <div class="conversation-main">
         <p v-if="!state.conversation" class="notice">{{ state.loading ? '正在读取…' : '选择已有会话，或新建学习后输入问题。' }}</p>
         <template v-else>
+          <div class="section-heading"><h2>{{ state.conversation.title }}</h2><button class="text-button" :disabled="state.busy || !!active" @click="archive">{{ state.conversation.archived ? '恢复会话' : '归档会话' }}</button></div>
           <details class="chat-options">
-            <summary>{{ state.conversation.title }} · 会话设置</summary>
+            <summary>修改会话名称</summary>
             <form @submit.prevent="update({ title })"><label>会话名称<input v-model="title" maxlength="100" required></label><button :disabled="state.busy">保存名称</button></form>
-            <label>资料范围<select :value="state.conversation.scope" :disabled="state.busy || !!active" @change="update({ scope: ($event.target as HTMLSelectElement).value as Scope, document_ids: [] })"><option value="combined">课程＋我的资料</option><option value="course">仅课程资料</option><option value="personal">仅我的资料</option></select></label>
-            <p v-if="state.conversation.document_ids.length" class="field-help">当前限于指定资料；更改范围会取消该限定。</p>
-            <button :disabled="state.busy || !!active" @click="update({ archived: !state.conversation.archived })">{{ state.conversation.archived ? '恢复会话' : '归档会话' }}</button>
           </details>
+          <p v-if="state.conversation.document_ids.length" class="field-help">本次对话使用从知识库选择的资料。</p>
           <div v-if="noReadyMaterials" class="notice" role="status">
-            当前资料范围没有可用于学习的资料，暂不能提问。可在会话设置中切换资料范围，
-            <RouterLink to="/knowledge">上传自己的笔记</RouterLink>，或<RouterLink to="/practice">前往练习中心使用实时 AI 出题</RouterLink>。
+            当前没有可用于学习的就绪资料。可<RouterLink to="/knowledge">补充学习资料</RouterLink>，或<RouterLink to="/practice">前往练习中心</RouterLink>。
             <button type="button" class="text-button" :disabled="state.loading" @click="reload()">重新检查资料</button>
           </div>
           <div class="message-history" aria-label="会话记录">
@@ -93,7 +92,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
               <p v-if="message.status === 'generating'" class="field-help">正在检索和生成回答…</p>
               <p v-if="message.status === 'failed'" class="form-error" role="alert">{{ message.error_message }}</p>
               <p v-if="message.status === 'cancelled'" class="field-help">回答已取消，已生成内容保留。</p>
-              <p v-if="message.answer_outcome === 'insufficient_materials'" class="field-help">资料不足 · 未计入有效答疑，也不参与新的学习总结。可调整资料范围或补充资料后重新提问。</p>
+              <p v-if="message.answer_outcome === 'insufficient_materials'" class="field-help">资料不足 · 未计入有效答疑，也不参与新的学习总结。可补充资料或把问题描述得更具体后重新提问。</p>
               <div v-if="message.citations.length" class="citation-links"><span>检索依据：</span><button v-for="value in message.citations" :key="value.number" class="text-button" @click="showCitation(value)">[{{ value.number }}] {{ value.filename }}{{ value.source_deleted ? '（来源已删除）' : '' }}</button></div>
               <RouterLink v-if="message.citations.length" :to="{ path: '/practice', query: { conversation: selected, document: message.citations[0]?.document_id, chapter: message.citations[0]?.chapter_id || state.conversation?.chapter_id || undefined, requirements: practiceRequirements || undefined } }">依据引用资料练习</RouterLink>
               <button v-if="index === state.messages.length - 1 && ['failed','cancelled'].includes(message.status)" :disabled="state.busy || !!active || !available" @click="retry(message.id)">重试这个问题</button>

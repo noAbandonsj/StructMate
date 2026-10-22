@@ -63,7 +63,7 @@ def test_conversation_permissions_archive_and_unconfigured_models(migrated_datab
         try:
             _, headers = register(first)
             _, other_headers = register(second, "other")
-            identifier = new_conversation(first, headers, scope="personal")
+            identifier = new_conversation(first, headers)
             assert first.get("/api/v1/conversations").json()["total"] == 1
             assert second.get("/api/v1/conversations").json()["total"] == 0
             path = f"/api/v1/conversations/{identifier}"
@@ -76,12 +76,22 @@ def test_conversation_permissions_archive_and_unconfigured_models(migrated_datab
                 assert response.status_code == 404
             assert send(first, headers, identifier).status_code == 503
             assert first.get(path + "/messages").json()["total"] == 0
-            assert first.patch(path, headers=headers, json={"scope": None}).status_code == 422
+            initial = first.get(path).json()
+            assert initial["scope"] == "combined"
+            for retired in ({"scope": "personal"}, {"document_ids": []}, {"chapter_id": None}):
+                assert first.patch(path, headers=headers, json=retired).status_code == 422
+            assert first.get(path).json() == initial
+            for field in ("title", "archived"):
+                assert first.patch(path, headers=headers, json={field: None}).status_code == 422
             assert first.patch(path, headers=headers, json={"title": " "}).status_code == 422
+            renamed = first.patch(path, headers=headers, json={"title": "  新名称  "})
+            assert renamed.status_code == 200 and renamed.json()["title"] == "新名称"
             assert first.patch(path, headers=headers, json={"archived": True}).status_code == 200
             assert first.get("/api/v1/conversations").json()["total"] == 0
             assert first.get("/api/v1/conversations?archived=true").json()["total"] == 1
             assert send(first, headers, identifier).status_code == 409
+            assert first.patch(path, headers=headers, json={"archived": False}).status_code == 200
+            assert first.get("/api/v1/conversations").json()["total"] == 1
             assert first.post("/api/v1/conversations", headers=ORIGIN, json={}).status_code == 403
         finally:
             second.close()
@@ -214,12 +224,6 @@ def test_cancel_concurrent_send_and_retry_are_idempotent(migrated_database, tmp_
         assert original.status_code == 202 and generation.started.wait(3)
         assert send(client, headers, identifier).json() == original.json()
         assert send(client, headers, identifier, "another").status_code == 409
-        assert (
-            client.patch(
-                f"/api/v1/conversations/{identifier}", headers=headers, json={"scope": "personal"}
-            ).status_code
-            == 409
-        )
         answer_id = original.json()["assistant_message_id"]
         cancel_url = f"/api/v1/messages/{answer_id}/cancel"
         assert client.post(cancel_url, headers=headers).json()["status"] == "cancelled"

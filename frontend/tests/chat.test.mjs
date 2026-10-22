@@ -54,6 +54,57 @@ function defaultFetch(url) {
   return Promise.resolve(response(conversation(url.split('/').at(-1))))
 }
 
+test('new conversations use combined materials and the list only requests active sessions', async () => {
+  let created, listUrl
+  globalThis.fetch = (url, options) => {
+    if (url.includes('/conversations?')) listUrl = url
+    if (url.endsWith('/conversations') && options?.method === 'POST') {
+      created = JSON.parse(options.body)
+      return Promise.resolve(response(conversation('new')))
+    }
+    return defaultFetch(url)
+  }
+  const view = scope('')
+  try {
+    await until(() => !view.state.loading)
+    assert.equal(new URL(listUrl, 'http://localhost').searchParams.has('archived'), false)
+    const result = await view.create(['chosen-document'], 'chapter')
+    assert.equal(result.id, 'new')
+    assert.deepEqual(created, { document_ids: ['chosen-document'], chapter_id: 'chapter' })
+  } finally { view.effect.stop() }
+})
+
+test('archiving keeps the current conversation on failure and removes it from the active list on success', async () => {
+  let archived = false, fail = true
+  globalThis.fetch = (url, options) => {
+    if (options?.method === 'PATCH') {
+      if (fail) return Promise.reject(new Error('archive failed'))
+      archived = JSON.parse(options.body).archived
+      return Promise.resolve(response({ ...conversation('one'), archived }))
+    }
+    if (url.includes('/conversations?')) return Promise.resolve(response(page(archived ? [] : [conversation('one')])))
+    if (url.endsWith('/conversations/one')) return Promise.resolve(response({ ...conversation('one'), archived }))
+    if (url.includes('/messages?')) return Promise.resolve(response(page([])))
+    return defaultFetch(url)
+  }
+  const view = scope()
+  try {
+    await until(() => !view.state.loading && view.state.conversation)
+    view.state.draft = '尚未发送的问题'
+    assert.equal(await view.update({ archived: true }), undefined)
+    assert.equal(view.state.conversation.archived, false)
+    assert.equal(view.state.conversations.length, 1)
+    assert.match(view.state.error, /连接/)
+    fail = false
+    view.state.page = 2
+    const result = await view.update({ archived: true })
+    assert.equal(result.archived, true)
+    assert.equal(view.state.conversations.length, 0)
+    assert.equal(view.state.page, 1)
+    assert.equal(view.state.draft, '尚未发送的问题')
+  } finally { view.effect.stop() }
+})
+
 test('a conversation with no ready materials keeps the draft and does not send', async () => {
   let writes = 0, configUrl = ''
   globalThis.fetch = (url, options) => {
