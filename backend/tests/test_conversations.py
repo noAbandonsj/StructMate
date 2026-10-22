@@ -138,14 +138,11 @@ def test_real_retrieval_stream_history_and_deleted_citation(migrated_database, t
             )
             assert send(first, headers, identifier).json() == response.json()
             assert send(first, headers, identifier, content="不同内容").status_code == 409
-            response = send(
-                first, headers, identifier, "question-2", "请用小例子解释。", intent="example"
-            )
+            response = send(first, headers, identifier, "question-2", "请用小例子解释。")
             assert response.status_code == 202
             wait_answer(first, identifier)
             assert any(item["role"] == "assistant" for item in generation.prompts[-1])
             assert generation.prompts[-1][-1]["content"] == "请用小例子解释。"
-            assert "具体小例子" in generation.prompts[-1][0]["content"]
             assert first.delete(f"/api/v1/documents/{own}", headers=headers).status_code == 202
             history = first.get(f"/api/v1/conversations/{identifier}/messages").json()
             assert history["total"] == 4

@@ -3,22 +3,25 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useChat } from '../state/chat'
 import SummaryPanel from '../components/SummaryPanel.vue'
+import ConversationListItem from '../components/ConversationListItem.vue'
 import RecommendationPanel from '../components/RecommendationPanel.vue'
 import MarkdownContent from '../components/MarkdownContent'
-import type { Citation } from '../api/chat'
+import type { Citation, Conversation } from '../api/chat'
 import { documentFileUrl, getDocument } from '../api/documents'
 
 const route = useRoute(), router = useRouter()
 const selected = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const { state, active, reload, create, send, retry, cancel, update, older, reconnect, generateSummary, refreshSummary } = useChat(selected)
-const title = ref('')
 const citation = ref<Citation | null>(null)
 const citationError = ref('')
 const citationPane = ref<HTMLElement | null>(null)
 let citationTrigger: HTMLElement | null = null
 let citationVersion = 0
 watch(selected, () => { citationVersion++; citation.value = null; citationError.value = '' })
-watch(() => state.conversation?.title, value => { title.value = value ?? '' })
+const conversations = computed(() => {
+  const current = state.conversation
+  return current?.archived ? [current, ...state.conversations.filter(item => item.id !== current.id)] : state.conversations
+})
 const available = computed(() => state.config?.generation_available && state.config.embedding_available)
 const noReadyMaterials = computed(() => state.config?.ready_document_count === 0)
 const practiceRequirements = computed(() => ([...state.messages].reverse().find(message => message.role === 'user')?.content || state.conversation?.title || '').slice(0, 500))
@@ -28,10 +31,13 @@ async function start() {
   const conversation = await create(documents, point)
   if (conversation) await router.push('/chat/' + conversation.id)
 }
-async function archive() {
-  if (!state.conversation || active.value) return
-  const result = await update({ archived: !state.conversation.archived })
-  if (result?.archived) await router.push('/chat')
+async function rename(id: string, title: string) {
+  return !!await update({ title }, id)
+}
+async function archive(conversation: Conversation) {
+  if (conversation.id === selected.value && active.value) return
+  const result = await update({ archived: !conversation.archived }, conversation.id)
+  if (result?.archived && result.id === selected.value) await router.push('/chat')
 }
 async function showCitation(value: Citation) {
   const version = ++citationVersion
@@ -59,9 +65,9 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
           <button class="primary-button" :disabled="state.busy">新建学习</button>
           <p class="field-help">{{ route.query.document ? '本次使用从知识库选择的资料。' : '默认使用课程资料＋我的学习资料。' }}</p>
         </form>
-        <p v-if="state.loading && !state.conversations.length">正在读取会话…</p>
-        <p v-else-if="!state.conversations.length && !state.error" class="field-help">暂无进行中的会话。</p>
-        <RouterLink v-for="conversation in state.conversations" :key="conversation.id" :to="'/chat/' + conversation.id" class="conversation-link" :class="{ selected: selected === conversation.id }">{{ conversation.title }}</RouterLink>
+        <p v-if="state.loading && !conversations.length">正在读取会话…</p>
+        <p v-else-if="!conversations.length && !state.error" class="field-help">暂无进行中的会话。</p>
+        <ConversationListItem v-for="conversation in conversations" :key="conversation.id" :conversation="conversation" :selected="selected === conversation.id" :busy="state.busy" :can-archive="conversation.id !== selected || !active" :rename="title => rename(conversation.id, title)" @archive="archive(conversation)" />
         <div class="document-pagination" v-if="state.total > 20">
           <button :disabled="state.page <= 1 || state.loading" @click="state.page--; reload()">上一页</button>
           <span>{{ state.page }} / {{ Math.ceil(state.total / 20) }}</span>
@@ -71,18 +77,14 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
       <div class="conversation-main">
         <p v-if="!state.conversation" class="notice">{{ state.loading ? '正在读取…' : '选择已有会话，或新建学习后输入问题。' }}</p>
         <template v-else>
-          <div class="section-heading"><h2>{{ state.conversation.title }}</h2><button class="text-button" :disabled="state.busy || !!active" @click="archive">{{ state.conversation.archived ? '恢复会话' : '归档会话' }}</button></div>
-          <details class="chat-options">
-            <summary>修改会话名称</summary>
-            <form @submit.prevent="update({ title })"><label>会话名称<input v-model="title" maxlength="100" required></label><button :disabled="state.busy">保存名称</button></form>
-          </details>
+          <div class="section-heading"><h2>{{ state.conversation.title }}</h2></div>
           <p v-if="state.conversation.document_ids.length" class="field-help">本次对话使用从知识库选择的资料。</p>
           <div v-if="noReadyMaterials" class="notice" role="status">
             当前没有可用于学习的就绪资料。可<RouterLink to="/knowledge">补充学习资料</RouterLink>，或<RouterLink to="/practice">前往练习中心</RouterLink>。
             <button type="button" class="text-button" :disabled="state.loading" @click="reload()">重新检查资料</button>
           </div>
-          <div class="message-history" aria-label="会话记录">
-            <RouterLink :to="{ path: '/practice', query: { conversation: selected, chapter: state.conversation?.chapter_id || undefined, requirements: practiceRequirements || undefined } }">围绕本次对话练习</RouterLink>
+          <div class="message-history" :class="{ empty: !state.messages.length }" aria-label="会话记录">
+            <RouterLink v-if="state.messages.length" :to="{ path: '/practice', query: { conversation: selected, chapter: state.conversation?.chapter_id || undefined, requirements: practiceRequirements || undefined } }">围绕本次对话练习</RouterLink>
             <button v-if="state.historyPage > 1" @click="older()" :disabled="state.loading">查看更早消息</button>
             <p v-if="!state.messages.length" class="field-help">可以问：“栈和队列有什么区别？”或“用例子解释二叉树遍历”。</p>
             <article v-for="(message, index) in state.messages" :key="message.id" class="chat-message" :class="message.role">
@@ -101,8 +103,8 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
           <p v-if="state.streamError" class="form-error" role="alert">{{ state.streamError }} <button @click="reconnect()" :disabled="!active">重新连接</button></p>
           <form class="chat-composer" @submit.prevent="send">
             <label for="chat-question">学习问题</label>
-            <textarea id="chat-question" v-model="state.draft" maxlength="4000" rows="3" placeholder="输入问题，或继续追问…" :disabled="state.conversation.archived"></textarea>
-            <div class="composer-actions"><select v-model="state.intent" aria-label="回答方式"><option value="explain">直接讲解</option><option value="hint">给我提示</option><option value="example">用例子解释</option></select>
+            <textarea id="chat-question" v-model="state.draft" maxlength="4000" rows="3" placeholder="输入问题，也可说明“给我提示”或“举例说明”…" :disabled="state.conversation.archived"></textarea>
+            <div class="composer-actions">
               <button v-if="active" type="button" @click="cancel()" :disabled="state.busy">取消回答</button>
               <button v-else class="primary-button" :disabled="state.busy || state.loading || !available || noReadyMaterials || !state.draft.trim() || state.conversation.archived">{{ state.busy ? '正在发送…' : '发送问题' }}</button>
             </div>

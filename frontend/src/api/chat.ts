@@ -1,7 +1,6 @@
 import type { Page } from './client'
 import { request } from './client'
 
-export type Intent = 'explain' | 'hint' | 'example'
 export interface Conversation {
   id: string; title: string; scope: 'combined' | 'course' | 'personal'; document_ids: string[]
   chapter_id: string | null; archived: boolean; created_at: string; updated_at: string
@@ -16,7 +15,7 @@ export interface Citation {
 export interface Message {
   id: string; conversation_id: string; sequence: number; role: 'user' | 'assistant'
   content: string; status: 'generating' | 'completed' | 'failed' | 'cancelled'
-  intent: Intent; reply_to_message_id: string | null; citations: Citation[]
+  reply_to_message_id: string | null; citations: Citation[]
   error_code: string | null; error_message: string | null
   answer_outcome: 'answered' | 'insufficient_materials' | null
 }
@@ -53,8 +52,8 @@ export const create = (csrf: string, value: ConversationInput, signal: AbortSign
   request<Conversation>('/conversations', { ...json(csrf, value), signal })
 export const update = (csrf: string, id: string, value: ConversationPatch, signal: AbortSignal) =>
   request<Conversation>('/conversations/' + encodeURIComponent(id), { ...json(csrf, value, 'PATCH'), signal })
-export const send = (csrf: string, id: string, content: string, intent: Intent, key: string, signal: AbortSignal) =>
-  request<Queued>('/conversations/' + encodeURIComponent(id) + '/messages', { ...json(csrf, { content, intent, client_request_id: key }), signal })
+export const send = (csrf: string, id: string, content: string, key: string, signal: AbortSignal) =>
+  request<Queued>('/conversations/' + encodeURIComponent(id) + '/messages', { ...json(csrf, { content, client_request_id: key }), signal })
 export const retry = (csrf: string, id: string, key: string, signal: AbortSignal) =>
   request<Queued>('/messages/' + encodeURIComponent(id) + '/retry', { ...json(csrf, { client_request_id: key }), signal })
 export const cancel = (csrf: string, id: string, signal: AbortSignal) =>

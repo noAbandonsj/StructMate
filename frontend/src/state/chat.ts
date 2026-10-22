@@ -9,14 +9,14 @@ export function useChat(selected: Ref<string>) {
     conversations: [] as api.Conversation[], total: 0, page: 1,
     conversation: null as api.Conversation | null, messages: [] as api.Message[],
     config: null as api.Config | null, loading: false, busy: false, error: '', streamError: '',
-    draft: '', intent: 'explain' as api.Intent, historyPage: 1,
+    draft: '', historyPage: 1,
     summary: null as api.Summary | null, summaryError: '', summaryLoading: false,
   })
   let epoch = 0, readVersion = 0, disposed = false
   let reader = new AbortController(), writer = new AbortController()
   let closeStream: (() => void) | null = null
   let streamVersion = 0
-  let pending: { content: string; intent: api.Intent; key: string } | null = null
+  let pending: { content: string; key: string } | null = null
   let restoringDraft = false
   let summaryVersion = 0, summaryReader = new AbortController()
   let summaryTimer: ReturnType<typeof setTimeout> | null = null
@@ -128,10 +128,10 @@ export function useChat(selected: Ref<string>) {
       state.error = '当前资料范围没有可用于学习的资料。请补充就绪资料，或前往练习中心使用实时 AI 出题。'
       return
     }
-    if (!pending || pending.content !== content || pending.intent !== state.intent)
-      pending = { content, intent: state.intent, key: crypto.randomUUID() }
+    if (!pending || pending.content !== content)
+      pending = { content, key: crypto.randomUUID() }
     const request = pending
-    const result = await mutate((csrf, signal) => api.send(csrf, id, content, request.intent, request.key, signal))
+    const result = await mutate((csrf, signal) => api.send(csrf, id, content, request.key, signal))
     if (!result || !valid(version, user, id)) return
     pending = null
     if (state.draft.trim() === content) state.draft = ''
@@ -157,11 +157,11 @@ export function useChat(selected: Ref<string>) {
       closeStream?.()
     }
   }
-  async function update(values: api.ConversationPatch) {
+  async function update(values: api.ConversationPatch, identifier = selected.value) {
     const id = selected.value, version = epoch, user = authState.account?.user.id
-    const result = await mutate((csrf, signal) => api.update(csrf, id, values, signal))
+    const result = await mutate((csrf, signal) => api.update(csrf, identifier, values, signal))
     if (result) {
-      state.conversation = result
+      if (identifier === id) state.conversation = result
       if (values.archived !== undefined) state.page = 1
       await reload()
       if (valid(version, user, id)) return result

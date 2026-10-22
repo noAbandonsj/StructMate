@@ -36,7 +36,6 @@ from capstone.services.learning_readiness import learning_readiness
 router = APIRouter(tags=["conversations"], dependencies=[Depends(no_store)])
 write_dependencies = [Depends(require_origin)]
 Scope = Literal["combined", "course", "personal"]
-Intent = Literal["explain", "hint", "example"]
 
 
 class ConversationInput(BaseModel):
@@ -91,7 +90,6 @@ class RequestKey(BaseModel):
 
 class SendInput(RequestKey):
     content: str = Field(min_length=1, max_length=4000)
-    intent: Intent = "explain"
 
     @field_validator("content")
     @classmethod

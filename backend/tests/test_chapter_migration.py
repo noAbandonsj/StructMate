@@ -78,6 +78,8 @@ def test_cleanup_removes_old_history_and_schema_but_preserves_accounts_and_files
                     row["question_source"] = "ai"
                 if name == "practice_items":
                     row["feedback"] = None
+                if name == "messages":
+                    row["intent"] = "explain"
             if rows:
                 table = Table(name, metadata, autoload_with=connection)
                 # Values read through sqlite text are already serialized.

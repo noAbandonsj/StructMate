@@ -76,9 +76,7 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
         conversation = get_conversation(session, identifier, user_id)
         digest = sha256(
             json.dumps(
-                {"retry": str(retry_id)}
-                if retry_id
-                else {"content": data.content, "intent": data.intent},
+                {"retry": str(retry_id)} if retry_id else {"content": data.content},
                 ensure_ascii=False,
                 sort_keys=True,
             ).encode()
@@ -117,9 +115,8 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
                 raise ApiError(
                     409, "RETRY_NOT_LATEST", "仅能重试最近失败或取消的回答，请重新提问。"
                 )
-            question_id, intent, snapshot = (
+            question_id, snapshot = (
                 original.reply_to_message_id,
-                original.intent,
                 original.scope_snapshot,
             )
         else:
@@ -129,11 +126,10 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
                 role="user",
                 content=data.content,
                 status="completed",
-                intent=data.intent,
             )
             session.add(question)
             session.flush()
-            question_id, intent = question.id, data.intent
+            question_id = question.id
             snapshot = {"scope": conversation.scope, "document_ids": conversation.document_ids}
             latest += 1
         if not available:
@@ -151,7 +147,6 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
             sequence=latest + 1,
             role="assistant",
             reply_to_message_id=question_id,
-            intent=intent,
             scope_snapshot=snapshot,
             request_id=data.client_request_id,
             request_hash=digest,
@@ -178,7 +173,6 @@ def message_info(session, message):
         "role": message.role,
         "content": message.content,
         "reply_to_message_id": message.reply_to_message_id,
-        "intent": message.intent,
         "status": message.status,
         "answer_outcome": message.answer_outcome,
         "citations": citations,

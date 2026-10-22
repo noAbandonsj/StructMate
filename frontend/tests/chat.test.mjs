@@ -105,6 +105,41 @@ test('archiving keeps the current conversation on failure and removes it from th
   } finally { view.effect.stop() }
 })
 
+test('list actions update another conversation without replacing the current conversation or draft', async () => {
+  let other = conversation('two'), releaseDetail, delayDetail = false
+  const writes = []
+  globalThis.fetch = (url, options) => {
+    if (options?.method === 'PATCH') {
+      writes.push({ url, body: JSON.parse(options.body) })
+      other = { ...other, ...JSON.parse(options.body) }
+      return Promise.resolve(response(other))
+    }
+    if (url.includes('/conversations?')) return Promise.resolve(response(page([conversation('one'), ...other.archived ? [] : [other]])))
+    if (url.endsWith('/conversations/one') && delayDetail) return new Promise(resolve => { releaseDetail = resolve })
+    if (url.includes('/messages?')) return Promise.resolve(response(page([])))
+    return defaultFetch(url)
+  }
+  const view = scope()
+  try {
+    await until(() => !view.state.loading && view.state.conversation)
+    view.state.draft = '正在编写的追问'
+    delayDetail = true
+    const rename = view.update({ title: '新的名称' }, 'two')
+    await until(() => releaseDetail)
+    assert.equal(view.state.conversation.id, 'one')
+    releaseDetail(response(conversation('one')))
+    assert.equal((await rename).id, 'two')
+    assert.equal(view.state.conversations[1].title, '新的名称')
+    delayDetail = false
+    assert.equal((await view.update({ archived: true }, 'two')).archived, true)
+    assert.deepEqual(view.state.conversations.map(item => item.id), ['one'])
+    assert.equal(view.selected.value, 'one')
+    assert.equal(view.state.conversation.id, 'one')
+    assert.equal(view.state.draft, '正在编写的追问')
+    assert.ok(writes.every(write => write.url.endsWith('/conversations/two')))
+  } finally { view.effect.stop() }
+})
+
 test('a conversation with no ready materials keeps the draft and does not send', async () => {
   let writes = 0, configUrl = ''
   globalThis.fetch = (url, options) => {
@@ -169,11 +204,13 @@ test('a timed out send retains draft and reuses its request key', async () => {
   const view = scope()
   try {
     await until(() => !view.state.loading && view.state.conversation)
-    view.state.draft = '我的问题'
+    view.state.draft = '请用例子解释栈和队列的区别'
     await view.send(); await view.send()
-    assert.equal(view.state.draft, '我的问题')
+    assert.equal(view.state.draft, '请用例子解释栈和队列的区别')
     assert.ok(view.state.error)
     assert.equal(submitted.length, 2)
+    assert.equal(submitted[0].content, '请用例子解释栈和队列的区别')
+    assert.equal(submitted[0].intent, undefined)
     assert.equal(submitted[0].client_request_id, submitted[1].client_request_id)
   } finally { view.effect.stop() }
 })
