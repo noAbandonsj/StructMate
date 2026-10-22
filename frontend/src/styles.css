@@ -165,7 +165,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .practice-settings fieldset { display: grid; gap: 14px; border: 0; padding: 0; min-width: 0; }
 .practice-settings label { display: grid; gap: 6px; font-size: 13px; margin: 0; }
 .practice-settings select, .practice-settings input, .practice-settings textarea { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; }
-.practice-settings details, .performance-panel { margin: 16px 0; }
+.practice-settings details { margin: 16px 0; }
 .practice-progress { padding: 12px 16px; background: #eaf4ee; border-radius: 10px; }
 .question-card { border-top: 1px solid #dce5e5; padding: 20px 0; }
 .question-card h3 { white-space: pre-wrap; line-height: 1.7; overflow-wrap: anywhere; }
@@ -174,7 +174,6 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .question-actions { display: flex; gap: 12px; }
 .answer-result { background: #f1f7f2; border-radius: 12px; padding: 18px; line-height: 1.7; overflow-wrap: anywhere; }
 .answer-result details { margin-top: 14px; }
-.answer-result textarea { width: 100%; min-height: 80px; box-sizing: border-box; }
 .wrong-filters { display: flex; gap: 24px; align-items: end; margin: 20px 0; }
 .wrong-filters label { display: grid; gap: 8px; }
 .wrong-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr); gap: 24px; align-items: start; }
@@ -222,11 +221,6 @@ button[aria-pressed=true] { background: #e7eee8; border-color: var(--accent); co
 .practice-settings .custom-count { display: flex; flex-basis: 100%; align-items: center; gap: 12px; font-weight: 400; color: var(--muted); }
 .practice-settings .custom-count input { width: 78px; }
 .practice-settings details { margin: 0; }
-.practice-settings .point-picker { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
-.point-picker > input { margin-top: 10px; font-size: 13px; }
-.point-list { max-height: 240px; overflow-y: auto; margin: 10px 0; }
-.practice-settings .point-list fieldset { display: block; margin: 12px 0; }
-.point-list legend { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .practice-settings .check-row { display: flex; align-items: center; gap: 9px; margin: 9px 0; font-weight: 400; }
 .practice-settings .check-row input { width: 16px; padding: 0; }
 .history-heading { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 20px; font-size: 17px; }

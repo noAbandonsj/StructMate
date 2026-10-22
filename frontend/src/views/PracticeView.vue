@@ -2,19 +2,17 @@
 import { computed, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { usePractice } from '../state/practice'
-import { difficultyOptions } from '../learning-options'
-import MarkdownContent from '../components/MarkdownContent'
+import { difficultyOptions, practiceSourceLabel as sourceLabel } from '../learning-options'
+import { practiceProgress } from '../practice-answers'
+import PracticeQuestionCard from '../components/PracticeQuestionCard.vue'
 const route = useRoute(), router = useRouter()
 const selected = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const { state, reload, create, submitAll, hint } = usePractice(selected)
-const effectiveItems = computed(() => state.items.filter(item => item.is_valid))
-const pendingItems = computed(() => effectiveItems.value.filter(item => !item.attempt))
-const missingItems = computed(() => pendingItems.value.filter(item => !item.options.some(option => option.key === state.choices[item.id])))
-const answeredCount = computed(() => effectiveItems.value.length - missingItems.value.length)
+const progress = computed(() => practiceProgress(state.items, state.choices))
 const submitReason = computed(() => {
   if (state.busy) return '正在提交，请稍候。'
   if (state.loading || state.readError || !state.ready) return '练习数据尚未就绪，请刷新后重试。'
-  if (missingItems.value.length) return `还有 ${missingItems.value.length} 道题未作答，完成后可统一提交。`
+  if (progress.value.missingItems.length) return `还有 ${progress.value.missingItems.length} 道题未作答，完成后可统一提交。`
   return ''
 })
 const unavailableMaterials = computed(() => state.form.document_ids.filter(id => !state.materials.some(item => item.id === id)))
@@ -35,9 +33,7 @@ function jumpTo(id: string) {
   element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   element?.focus({ preventScroll: true })
 }
-const sourceLabel = (source: string | null) => source === 'ai' ? '实时 AI · 参考答案' : source === 'bank' ? '核验题库' : '错题复习'
 function time(value: string) { return new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }
-function safeLink(value: string) { try { return ['https:', 'http:'].includes(new URL(value).protocol) ? value : '#' } catch { return '#' } }
 watch(() => route.query.topic, value => { if (typeof value === 'string') state.form.topic = value.slice(0, 500) }, { immediate: true })
 watch(() => route.query.document, value => { if (typeof value === 'string') state.form.document_ids = [value] }, { immediate: true })
 async function start() {
@@ -95,28 +91,15 @@ function retryGeneration() {
           <p v-if="state.practice.status === 'generating'" class="notice" role="status">正在生成并复核题目，通常需要一些时间。可离开页面，回来后自动恢复状态；无需重复创建。</p>
           <div v-if="state.practice.status === 'failed'" class="form-error" role="alert">{{ state.practice.error_message }} <button @click="retryGeneration" :disabled="state.busy">按原设置重试</button></div>
           <p v-if="state.practice.notice" class="notice">{{ state.practice.notice }}</p>
-          <p v-if="state.practice.actual_count" class="practice-progress">{{ pendingItems.length ? `已作答 ${answeredCount} / ${effectiveItems.length} 道有效题，完成后统一提交。` : `已提交 ${state.practice.submitted_count} / ${state.practice.effective_count} 道有效题，答对 ${state.practice.correct_count} 道。` }}{{ state.practice.status === 'completed' ? '本组已完成。' : '' }}</p>
+          <p v-if="state.practice.actual_count" class="practice-progress">{{ progress.pendingItems.length ? `已作答 ${progress.answeredCount} / ${progress.effectiveItems.length} 道有效题，完成后统一提交。` : `已提交 ${state.practice.submitted_count} / ${state.practice.effective_count} 道有效题，答对 ${state.practice.correct_count} 道。` }}{{ state.practice.status === 'completed' ? '本组已完成。' : '' }}</p>
           <nav v-if="state.items.length" class="question-nav" aria-label="题号导航"><button v-for="item in state.items" :key="item.id" :class="{ answered: !!item.attempt, drafted: !item.attempt && !!state.choices[item.id], incorrect: item.attempt?.is_valid && !item.attempt.is_correct }" :aria-label="`第 ${item.position} 题，${!item.is_valid ? '已停用' : item.attempt ? item.attempt.is_correct ? '已答对' : '已答错' : state.choices[item.id] ? '已作答，未提交' : '未作答'}`" @click="jumpTo(item.id)">{{ item.position }}</button></nav>
-          <article v-for="item in state.items" :key="item.id" :id="'question-' + item.id" class="question-card" tabindex="-1">
-            <p class="field-help">第 {{ item.position }} 题 · {{ item.type === 'true_false' ? '判断题' : '单选题' }} · {{ sourceLabel(item.source_type) }}</p>
-            <h3>{{ item.stem }}</h3>
-            <p v-if="!item.is_valid" class="notice">此题已确认有误，已排除统计：{{ item.disabled_reason }}</p>
-            <fieldset class="answer-options" :disabled="state.busy || !!item.attempt || !item.is_valid"><label v-for="option in item.options" :key="option.key" :class="{ 'option-correct': item.attempt?.is_valid && item.attempt.reference_answer === option.key, 'option-incorrect': item.attempt?.is_valid && !item.attempt.is_correct && item.attempt.answer === option.key }"><input type="radio" :name="item.id" :value="option.key" :checked="(item.attempt?.answer ?? state.choices[item.id]) === option.key" @change="state.choices[item.id] = option.key"><span>{{ option.text }}</span></label></fieldset>
-            <template v-if="!item.attempt && item.is_valid">
-              <p v-if="item.hint" class="notice">提示：{{ item.hint }}</p>
-              <div class="question-actions"><button :disabled="state.busy || item.hinted" @click="hint(item)">{{ item.hinted ? '已使用提示' : '给我提示' }}</button></div>
-            </template>
-            <div v-else-if="item.attempt" class="answer-result" :class="{ incorrect: item.attempt.is_valid && !item.attempt.is_correct }" role="status">
-              <strong>{{ !item.attempt.is_valid ? '此结果已排除统计' : item.attempt.is_correct ? '回答正确' : '已加入错题本' }}</strong>
-              <p>{{ item.source_type === 'ai' ? '参考答案' : '核验答案' }}：{{ item.options.find(option => option.key === item.attempt!.reference_answer)?.text }}</p><MarkdownContent :content="item.attempt.explanation" />
-              <p class="field-help">{{ item.attempt.category === 'first_independent' ? '首次独立作答' : item.attempt.category === 'first_hinted' ? '首次提示作答' : item.attempt.category === 'review' ? '错题复习' : '重复练习' }}{{ item.attempt.hinted ? ' · 使用了提示' : '' }}</p>
-              <RouterLink v-if="item.attempt.wrong_question_id" :to="'/wrong/' + item.attempt.wrong_question_id">查看错题与历次作答</RouterLink>
-              <details><summary>依据与来源</summary><p v-for="source in item.attempt.source_info.sources" :key="source.url"><a :href="safeLink(source.url)" target="_blank" rel="noopener noreferrer">{{ source.title }}</a> · {{ source.author }} · {{ source.license }}</p><p v-for="(source, index) in item.attempt.source_info.citations" :key="index">{{ source.filename }}{{ source.source_deleted ? '（来源已删除，保留历史片段）' : '' }} {{ source.heading }} {{ source.page_number ? '第 ' + source.page_number + ' 页' : '' }}<span class="field-help">{{ source.text }}</span></p><p v-if="!item.attempt.source_info.sources?.length && !item.attempt.source_info.citations?.length" class="field-help">本题无资料引用，答案为生成时保存的 AI 参考答案。</p></details>
-
-            </div>
-          </article>
-          <section v-if="pendingItems.length && state.practice.status === 'ready'" class="practice-submit" aria-label="提交整组练习">
-            <p>已作答 {{ answeredCount }} / {{ effectiveItems.length }} 道有效题。</p>
+          <PracticeQuestionCard
+            v-for="item in state.items" :key="item.id" :item="item"
+            :choice="state.choices[item.id]" :busy="state.busy"
+            @choose="(id, answer) => state.choices[id] = answer" @hint="hint"
+          />
+          <section v-if="progress.pendingItems.length && state.practice.status === 'ready'" class="practice-submit" aria-label="提交整组练习">
+            <p>已作答 {{ progress.answeredCount }} / {{ progress.effectiveItems.length }} 道有效题。</p>
             <p v-if="submitReason" id="practice-submit-reason" class="field-help" role="status">{{ submitReason }}</p>
             <p v-else class="field-help">全部题目已作答，可以统一提交并查看结果。</p>
             <button class="primary-button" :disabled="!!submitReason" :aria-describedby="submitReason ? 'practice-submit-reason' : undefined" @click="submitAll()">{{ state.busy ? '正在提交…' : '提交全部答案' }}</button>

@@ -4,7 +4,7 @@ import { createServer } from 'vite'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
-let server, markdown, connection, client, options
+let server, markdown, connection, client, options, links
 const originalFetch = globalThis.fetch
 const response = (value, status = 200) => new Response(JSON.stringify(value), { status })
 before(async () => {
@@ -13,9 +13,22 @@ before(async () => {
   connection = await server.ssrLoadModule('/src/state/connection.ts')
   client = await server.ssrLoadModule('/src/api/client.ts')
   options = await server.ssrLoadModule('/src/learning-options.ts')
+  links = await server.ssrLoadModule('/src/links.ts')
 })
 after(async () => { globalThis.fetch = originalFetch; await server.close() })
 const html = (text, citations = []) => renderToString(createSSRApp({ render: () => h('div', markdown.renderMarkdown(text, citations, () => {}, () => {})) }))
+
+test('source links preserve HTTP(S) URLs including their query and fragment', () => {
+  for (const url of ['https://example.com/course?q=a%20b#section', 'http://127.0.0.1:8000/file']) {
+    assert.equal(links.safeSourceLink(url), url)
+  }
+})
+
+test('source links disable executable schemes, local files, relative URLs and malformed input', () => {
+  for (const url of ['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'file:///C:/secret.txt', 'mailto:user@example.com', '//example.com/course', '/course', '', 'not a URL']) {
+    assert.equal(links.safeSourceLink(url), '#', url)
+  }
+})
 
 test('reading supports headings, tables and code without interpreting raw HTML or remote images', async () => {
   const value = await html('## 栈\n\n|操作|复杂度|\n|---|---|\n|push|O(1)|\n\n```c\nprintf("<script>alert(1)</script>");\n```\n\n<img src=x onerror=alert(1)>\n\n![图](https://example.com/track)\n\n[危险](javascript:alert(1))\n\n[正常](https://example.com/course)')

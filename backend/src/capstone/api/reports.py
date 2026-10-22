@@ -18,7 +18,7 @@ from capstone.core.auth import (
 from capstone.db.models import Conversation, LearningReport, PracticeSession
 from capstone.services.learning_readiness import learning_readiness
 from capstone.services.learning_stats import learning_stats
-from capstone.services.practice import practice_info
+from capstone.services.practice_serialization import practice_info
 from capstone.services.reports import create_report, get_report, report_info, report_markdown
 
 router = APIRouter(tags=["reports"], dependencies=[Depends(no_store)])

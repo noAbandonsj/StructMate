@@ -276,6 +276,9 @@ test('only a completed set of choices is sent in one request and all results app
     await view.submitAll()
     assert.equal(posted.length, 0)
     assert.ok(view.state.items.every(value => !value.attempt))
+    view.state.choices['second-question'] = 'invalid-option'
+    await view.submitAll()
+    assert.equal(posted.length, 0, 'an invalid restored choice must still count as unanswered')
     view.state.choices['second-question'] = 'B'
     await view.submitAll()
     assert.equal(posted.length, 1)

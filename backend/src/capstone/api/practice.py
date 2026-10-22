@@ -31,17 +31,19 @@ from capstone.db.models import (
 )
 from capstone.services.performance import performance, selected_points
 from capstone.services.practice import (
-    attempt_info,
     create_practice,
     create_review,
     feedback,
     get_practice,
     get_wrong,
-    item_info,
-    practice_info,
     submit,
     submit_practice,
     use_hint,
+)
+from capstone.services.practice_serialization import (
+    attempt_info,
+    item_info,
+    practice_info,
     wrong_info,
 )
 

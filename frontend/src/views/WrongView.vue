@@ -3,11 +3,11 @@ import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useWrong } from '../state/wrong'
 import MarkdownContent from '../components/MarkdownContent'
+import { safeSourceLink } from '../links'
 const route = useRoute(), router = useRouter()
 const selected = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const { state, reload, review } = useWrong(selected)
 async function start(ids: string[]) { const practice = await review(ids); if (practice) await router.push('/practice/' + practice.id) }
-function safeLink(value: string) { try { return ['https:', 'http:'].includes(new URL(value).protocol) ? value : '#' } catch { return '#' } }
 </script>
 <template>
   <section>
@@ -33,7 +33,7 @@ function safeLink(value: string) { try { return ['https:', 'http:'].includes(new
         <p>{{ state.detail.source_type === 'ai' ? '参考答案' : '核验答案' }}：{{ state.detail.question?.options.find(option => option.key === state.detail!.question?.answer)?.text }}</p><MarkdownContent v-if="state.detail.question" :content="state.detail.question.explanation" />
         <button :disabled="state.busy || !state.detail.is_valid" @click="start([state.detail.id])">开始原题复习</button>
         <details><summary>原题依据与来源</summary>
-          <p v-for="source in state.detail.question?.source_info.sources" :key="source.url"><a :href="safeLink(source.url)" target="_blank" rel="noopener noreferrer">{{ source.title }}</a> · {{ source.author }} · {{ source.license }}</p>
+          <p v-for="source in state.detail.question?.source_info.sources" :key="source.url"><a :href="safeSourceLink(source.url)" target="_blank" rel="noopener noreferrer">{{ source.title }}</a> · {{ source.author }} · {{ source.license }}</p>
           <p v-for="(source, index) in state.detail.question?.source_info.citations" :key="index">{{ source.filename }}{{ source.source_deleted ? '（来源已删除，保留历史片段）' : '' }}<span class="field-help">{{ source.text }}</span></p>
         </details>
         <ol class="attempt-history"><li v-for="attempt in state.detail.attempts" :key="attempt.id">{{ new Date(attempt.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }} · {{ attempt.is_correct ? '答对' : '答错' }} · {{ attempt.hinted ? '使用提示' : '未使用提示' }}{{ attempt.is_valid ? '' : ' · 已排除统计' }}</li></ol>

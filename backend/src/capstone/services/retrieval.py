@@ -108,21 +108,5 @@ def retrieve(factory, embedding, vectors, settings, user_id, scope, document_ids
                 or payload.get("index_revision") != document.index_revision
             ):
                 continue
-            result.append(
-                {
-                    "number": len(result) + 1,
-                    "document_id": str(document.id),
-                    "chunk_id": str(chunk.id),
-                    "filename": document.filename,
-                    "knowledge_point_id": str(chunk.knowledge_point_id)
-                    if chunk.knowledge_point_id
-                    else None,
-                    "page_number": chunk.page_number,
-                    "heading": chunk.heading,
-                    "line_start": chunk.line_start,
-                    "line_end": chunk.line_end,
-                    "text": chunk.text[:3000],
-                    "source_info": document.source_info,
-                }
-            )
+            result.append(citation_info(chunk, document, len(result) + 1))
     return result

@@ -1,5 +1,6 @@
 import { onScopeDispose, reactive, watch, type Ref } from 'vue'
 import * as api from '../api/practice'
+import { isValidAnswer, practiceProgress } from '../practice-answers'
 import { ApiError } from '../api/client'
 import { authState, restoreAccount } from './auth'
 import { readDraft, saveDraft } from './learning-drafts'
@@ -58,7 +59,7 @@ export function usePractice(selected: Ref<string>) {
       state.practice = practice; state.items = items?.items ?? []
       state.ready = true
       for (const item of state.items) {
-        if (item.attempt || !item.is_valid || !item.options.some(option => option.key === state.choices[item.id])) delete state.choices[item.id]
+        if (item.attempt || !item.is_valid || !isValidAnswer(item, state.choices[item.id])) delete state.choices[item.id]
       }
       if (state.practice?.status === 'completed') {
         pendingSubmit = null
@@ -98,10 +99,8 @@ export function usePractice(selected: Ref<string>) {
   async function submitAll() {
     const version = epoch, user = authState.account?.user.id, id = selected.value
     if (!user || !id || state.loading || !state.ready || state.readError) return
-    const effective = state.items.filter(item => item.is_valid)
-    const answers = effective.map(item => ({ practice_item_id: item.id, answer: item.attempt?.answer ?? state.choices[item.id] }))
-      .sort((a, b) => a.practice_item_id.localeCompare(b.practice_item_id))
-    if (!answers.length || answers.some(value => !effective.find(item => item.id === value.practice_item_id)?.options.some(option => option.key === value.answer))) {
+    const { answers, canSubmit } = practiceProgress(state.items, state.choices)
+    if (!canSubmit) {
       state.error = '请完成本组全部有效题目后统一提交。'; return
     }
     const signature = JSON.stringify(answers)

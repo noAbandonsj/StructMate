@@ -12,3 +12,7 @@ export function recentDateRange(days: 7 | 30, now = new Date()) {
   start.setUTCDate(start.getUTCDate() - days + 1)
   return { from_date: start.toISOString().slice(0, 10), to_date: end }
 }
+
+export function practiceSourceLabel(source: string | null) {
+  return source === 'ai' ? '实时 AI · 参考答案' : source === 'bank' ? '核验题库' : '错题复习'
+}

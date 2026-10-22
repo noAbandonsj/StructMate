@@ -24,7 +24,7 @@ export interface Item {
   id: string; question_id: string; position: number; type: string; stem: string
   options: { key: string; text: string }[]; source_type: 'bank' | 'ai'; difficulty: string
   knowledge_point_id: string | null; hinted: boolean; hint: string | null; is_valid: boolean
-  disabled_reason: string | null; attempt: Result | null; feedback: { reason: string } | null
+  disabled_reason: string | null; attempt: Result | null
 }
 export interface Wrong {
   id: string; question_id: string; knowledge_point_id: string | null; topic?: string; stem: string; source_type: 'bank' | 'ai'
@@ -32,10 +32,6 @@ export interface Wrong {
   is_valid: boolean; disabled_reason: string | null; updated_at: string
   question?: { options: { key: string; text: string }[]; answer: string; explanation: string; source_info: Result['source_info'] }
   attempts?: Result[]
-}
-export interface Performance {
-  window_days: number; from_time: string; to_time: string
-  items: { knowledge_point_id: string; name: string; sample_count: number; accuracy: number | null; status: string; reason: string }[]
 }
 function write(csrf: string, value: unknown) {
   return { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(value) }
@@ -59,7 +55,6 @@ export const submitAll = (csrf: string, id: string, answers: { practice_item_id:
   request<{ practice: Practice; items: Item[] }>(path(id) + '/submit', { ...write(csrf, { answers, client_request_id: key }), signal })
 export const hint = (csrf: string, id: string, signal: AbortSignal) =>
   request<{ hint: string; hinted: boolean }>('/practice-items/' + encodeURIComponent(id) + '/hint', { ...write(csrf, {}), signal })
-export const performance = (signal: AbortSignal) => request<Performance>('/learning/performance', { signal })
 export const wrongList = (page: number, status: string, search: string, signal: AbortSignal) =>
   request<Page<Wrong>>('/wrong-questions?page=' + page + (status ? '&status=' + status : '') + (search ? '&search=' + encodeURIComponent(search) : ''), { signal })
 export const wrongDetail = (id: string, signal: AbortSignal) => request<Wrong>('/wrong-questions/' + encodeURIComponent(id), { signal })

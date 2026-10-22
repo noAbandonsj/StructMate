@@ -5,6 +5,7 @@ import { RouterLink } from 'vue-router'
 import { documentFileUrl } from '../api/documents'
 import type { LibraryInfo, KnowledgePoint } from '../api/knowledge'
 import { useDocuments } from '../state/documents'
+import { safeSourceLink } from '../links'
 import CourseDocumentDetails from './CourseDocumentDetails.vue'
 
 const props = defineProps<{ library: LibraryInfo; points: KnowledgePoint[]; management?: boolean }>()
@@ -62,9 +63,6 @@ async function confirmDelete(id: string) {
 }
 function sizeLabel(bytes: number) {
   return bytes < 1024 * 1024 ? (bytes / 1024).toFixed(1) + ' KiB' : (bytes / 1024 / 1024).toFixed(1) + ' MiB'
-}
-function safeLink(url: string) {
-  try { return ['https:', 'http:'].includes(new URL(url).protocol) ? url : '#' } catch { return '#' }
 }
 function markSelfAuthored() {
   if (selfAuthored.value) {
@@ -147,7 +145,7 @@ function pointName(id: string | null) { return props.points.find(point => point.
           <details v-if="document.source_info?.sources?.length" class="source-notice">
             <summary>来源与许可</summary>
             <p v-for="source in document.source_info.sources" :key="source.url" class="field-help">
-              <a v-if="source.url" :href="safeLink(source.url)" target="_blank" rel="noopener noreferrer">{{ source.title }}</a><span v-else>{{ source.title }}</span>
+              <a v-if="source.url" :href="safeSourceLink(source.url)" target="_blank" rel="noopener noreferrer">{{ source.title }}</a><span v-else>{{ source.title }}</span>
               · {{ source.author }} · {{ source.license }}
             </p>
           </details>
