@@ -65,14 +65,12 @@ const dateLabel = computed(() => state.detail
       <template v-else>
         <label class="catalog-search-label" for="catalog-search">搜索章节</label>
         <input id="catalog-search" v-model="search" class="catalog-search" type="search" placeholder="输入章节名称">
-        <button class="text-button" :aria-pressed="!selectedChapter" @click="selectedChapter = ''">全部章节</button>
-        <div class="catalog-grid"><button v-for="chapter in chapters" :key="chapter.id" class="chapter-card" :aria-pressed="selectedChapter === chapter.id" @click="selectedChapter = chapter.id">{{ chapter.name }}</button></div>
+        <p class="field-help">点击章节筛选资料，再次点击取消筛选。</p>
+        <div class="catalog-grid"><button v-for="chapter in chapters" :key="chapter.id" class="chapter-card" :aria-pressed="selectedChapter === chapter.id" @click="selectedChapter = selectedChapter === chapter.id ? '' : chapter.id">{{ chapter.name }}</button></div>
         <p v-if="!chapters.length" class="field-help">没有找到对应章节。</p>
       </template>
     </section>
 
     <DocumentPanel v-if="state.detail" :key="state.detail.id" :library="state.detail" :chapters="state.chapters" :chapter-id="selectedChapter" />
-
-
   </section>
 </template>
