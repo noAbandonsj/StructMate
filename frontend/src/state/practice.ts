@@ -1,19 +1,20 @@
 import { onScopeDispose, reactive, watch, type Ref } from 'vue'
 import * as api from '../api/practice'
+import { getChapters, type Chapter } from '../api/knowledge'
 import { isValidAnswer, practiceProgress } from '../practice-answers'
 import { ApiError } from '../api/client'
 import { authState, restoreAccount } from './auth'
 import { readDraft, saveDraft } from './learning-drafts'
 
 const defaults = (): api.PracticeSettings => ({
-  question_source: 'ai', topic: '', document_ids: [], count: 5,
+  chapter_id: '', document_ids: [], count: 5,
   difficulty: 'basic', generation_requirements: '',
 })
 export function usePractice(selected: Ref<string>) {
   const state = reactive({
     form: defaults(), history: [] as api.Practice[], total: 0, page: 1,
     practice: null as api.Practice | null, items: [] as api.Item[], choices: {} as Record<string, string>,
-    materials: [] as api.Material[],
+    materials: [] as api.Material[], chapters: [] as Chapter[],
     generationAvailable: false, ready: false, loading: false, busy: false, error: '', readError: '',
   })
   let epoch = 0, readVersion = 0, disposed = false, restoring = false
@@ -33,9 +34,8 @@ export function usePractice(selected: Ref<string>) {
     const user = authState.account?.user.id
     if (!user) return
     saveDraft(user, 'form', state.form.generation_requirements, 'practice')
-    saveDraft(user, 'topic', state.form.topic, 'practice')
     saveDraft(user, selected.value, JSON.stringify(state.choices), 'practice')
-    try { localStorage.setItem('capstone.practice.preferences.' + user, JSON.stringify({ ...state.form, topic: '', generation_requirements: '', source_conversation_id: null })) } catch { /* Optional preferences. */ }
+    try { localStorage.setItem('capstone.practice.preferences.' + user, JSON.stringify({ ...state.form, generation_requirements: '', source_conversation_id: null })) } catch { /* Optional preferences. */ }
   }
   async function reload() {
     const version = epoch, user = authState.account?.user.id, id = selected.value, readStamp = ++readVersion
@@ -46,15 +46,20 @@ export function usePractice(selected: Ref<string>) {
     state.loading = true
     state.readError = ''
     try {
-      const [history, materials, config, practice] = await Promise.all([
+      const [history, materials, config, practice, chapters] = await Promise.all([
         api.list(state.page, signal), api.materials(signal), api.config(signal),
-        id ? api.detail(id, signal) : Promise.resolve(null),
+        id ? api.detail(id, signal) : Promise.resolve(null), getChapters(signal),
       ])
       // Read items after terminal metadata: generation publishes them atomically.
       // Parallel reads could otherwise pair ready metadata with an earlier empty list.
       const items = id && practice?.status !== 'generating' ? await api.items(id, signal) : null
       if (!current()) return
       state.history = history.items; state.total = history.total; state.materials = materials
+      state.chapters = chapters
+      if (!state.form.chapter_id) {
+        const material = materials.find(item => state.form.document_ids.includes(item.id))
+        if (material?.chapter_id) state.form.chapter_id = material.chapter_id
+      }
       state.generationAvailable = config.generation_available
       state.practice = practice; state.items = items?.items ?? []
       state.ready = true
@@ -89,7 +94,14 @@ export function usePractice(selected: Ref<string>) {
     finally { if (valid(version, account.user.id, id)) state.busy = false }
   }
   async function create(sourceConversationId?: string) {
-    const settings = { ...state.form, topic: state.form.topic.trim(), question_source: 'ai' as const, source_conversation_id: sourceConversationId || null }
+    if (!state.ready || state.loading || state.readError) return
+    if (!state.chapters.some(chapter => chapter.id === state.form.chapter_id)) {
+      state.error = '请选择练习章节。'; return
+    }
+    if (state.form.document_ids.some(id => !state.materials.some(material => material.id === id && (!material.chapter_id || material.chapter_id === state.form.chapter_id)))) {
+      state.error = '参考资料已不可用或属于其他章节，请重新选择。'; return
+    }
+    const settings = { ...state.form, generation_requirements: state.form.generation_requirements.trim(), source_conversation_id: sourceConversationId || null }
     const signature = JSON.stringify(settings)
     if (!pendingCreate || pendingCreate.signature !== signature) pendingCreate = { signature, key: crypto.randomUUID() }
     const result = await mutate((csrf, signal) => api.create(csrf, settings, pendingCreate!.key, signal))
@@ -122,7 +134,7 @@ export function usePractice(selected: Ref<string>) {
     restoring = true
     epoch++; readVersion++; reader.abort(); writer.abort(); stopTimer()
     state.form = defaults(); state.practice = null; state.items = []; state.history = []; state.choices = {}; state.ready = false
-    state.error = state.readError = ''; state.total = 0; state.page = 1; state.busy = state.loading = false; state.materials = []; state.generationAvailable = false
+    state.error = state.readError = ''; state.total = 0; state.page = 1; state.busy = state.loading = false; state.materials = []; state.chapters = []; state.generationAvailable = false
     pendingCreate = null; pendingSubmit = null
     const user = authState.account?.user.id
     if (user) {
@@ -130,14 +142,14 @@ export function usePractice(selected: Ref<string>) {
         const value = JSON.parse(localStorage.getItem('capstone.practice.preferences.' + user) || '{}')
         if (['basic', 'intermediate', 'advanced'].includes(value.difficulty)) state.form.difficulty = value.difficulty
         if (Number.isInteger(value.count) && value.count >= 1 && value.count <= 20) state.form.count = value.count
+        if (typeof value.chapter_id === 'string') state.form.chapter_id = value.chapter_id
         if (Array.isArray(value.document_ids)) state.form.document_ids = value.document_ids.filter((value: unknown) => typeof value === 'string').slice(0, 5)
       } catch { /* Use validated defaults. */ }
       try {
         const pending = JSON.parse(readDraft(user, 'submit.' + selected.value, 'practice') || 'null')
         if (pending && typeof pending.signature === 'string' && typeof pending.key === 'string') pendingSubmit = pending
       } catch { pendingSubmit = null }
-      state.form.topic = readDraft(user, 'topic', 'practice').slice(0, 500)
-      state.form.generation_requirements = readDraft(user, 'form', 'practice')
+      state.form.generation_requirements = readDraft(user, 'form', 'practice').slice(0, 1000)
       try {
         const choices = JSON.parse(readDraft(user, selected.value, 'practice') || '{}')
         if (choices && typeof choices === 'object' && !Array.isArray(choices)) state.choices = choices

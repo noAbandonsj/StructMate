@@ -2,32 +2,16 @@ from datetime import timedelta
 
 from sqlalchemy import select
 
-from capstone.db.models import Attempt, KnowledgePoint, Question, utc_now
-
-
-def selected_points(session, identifiers):
-    points = session.scalars(
-        select(KnowledgePoint).order_by(KnowledgePoint.sort_order, KnowledgePoint.code)
-    ).all()
-    selected = set(identifiers)
-    roots = [point.code for point in points if point.id in selected]
-    return [
-        point
-        for point in points
-        if not selected
-        or any(point.code == code or point.code.startswith(code + ".") for code in roots)
-    ]
+from capstone.db.models import Attempt, Question, utc_now
+from capstone.services.chapters import chapters
 
 
 def performance(session, user_id, now=None):
     now = now or utc_now()
     cutoff = now - timedelta(days=30)
-    points = session.scalars(
-        select(KnowledgePoint).order_by(KnowledgePoint.sort_order, KnowledgePoint.code)
-    ).all()
-    codes = {point.id: point.code for point in points}
+    points = chapters(session)
     rows = session.execute(
-        select(Question.knowledge_point_id, Attempt.is_correct)
+        select(Question.chapter_id, Attempt.is_correct)
         .join(Attempt, Attempt.question_id == Question.id)
         .where(
             Attempt.user_id == user_id,
@@ -40,20 +24,13 @@ def performance(session, user_id, now=None):
     ).all()
     result = []
     for point in points:
-        if point.parent_id is not None:
-            continue
-        scores = [
-            correct
-            for identifier, correct in rows
-            if identifier in codes
-            and (codes[identifier] == point.code or codes[identifier].startswith(point.code + "."))
-        ]
+        scores = [correct for identifier, correct in rows if identifier == point.id]
         count, correct = len(scores), sum(scores)
         rate = correct / count if count else None
         status = "insufficient" if count < 5 else "priority" if rate < 0.6 else "steady"
         result.append(
             {
-                "knowledge_point_id": str(point.id),
+                "chapter_id": str(point.id),
                 "code": point.code,
                 "name": point.name,
                 "sample_count": count,

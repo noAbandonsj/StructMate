@@ -6,21 +6,8 @@ import DocumentPanel from '../components/DocumentPanel.vue'
 
 const { state, reload, selectLibrary } = useKnowledge()
 const search = ref('')
-const roots = computed(() => state.points.filter(point => point.parent_id === null)
-  .sort((a, b) => a.sort_order - b.sort_order))
-const chapters = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  return roots.value.map(root => {
-    const children = state.points.filter(point => point.parent_id === root.id)
-      .sort((a, b) => a.sort_order - b.sort_order)
-    const rootMatches = root.name.toLowerCase().includes(query)
-    return {
-      root,
-      children: children.filter(point => rootMatches || point.name.toLowerCase().includes(query)),
-      matches: rootMatches || children.some(point => point.name.toLowerCase().includes(query)),
-    }
-  }).filter(chapter => chapter.matches)
-})
+const selectedChapter = ref('')
+const chapters = computed(() => state.chapters.filter(chapter => chapter.name.includes(search.value.trim())))
 const dateLabel = computed(() => state.detail
   ? new Date(state.detail.created_at).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })
   : '')
@@ -71,30 +58,21 @@ const dateLabel = computed(() => state.detail
       </template>
     </section>
 
-    <DocumentPanel v-if="state.detail" :key="state.detail.id" :library="state.detail" :points="state.points" />
-
     <section class="course-catalog" aria-labelledby="catalog-title">
-      <div class="section-heading">
-        <h2 id="catalog-title">课程知识点目录</h2>
-        <span v-if="state.pointsStatus === 'ready'">{{ roots.length }} 个章节 · {{ state.points.length - roots.length }} 个知识点</span>
-      </div>
-      <label class="catalog-search-label" for="catalog-search">搜索知识点</label>
-      <input id="catalog-search" v-model="search" class="catalog-search" type="search" placeholder="例如：循环队列、遍历、复杂度">
-      <p v-if="state.pointsStatus === 'loading'" class="notice" role="status">正在读取课程目录…</p>
-      <div v-else-if="state.pointsStatus === 'error'" class="form-error" role="alert">
-        {{ state.pointsError }}
-        <button class="text-button" type="button" @click="reload">重新加载</button>
-      </div>
-      <p v-else-if="!state.points.length" class="notice">课程目录尚未准备好，请稍后重试。</p>
-      <p v-else-if="!chapters.length" class="notice" role="status">没有找到对应知识点，换个关键词试试。</p>
-      <div v-else class="catalog-grid">
-        <details v-for="(chapter, index) in chapters" :key="chapter.root.id" class="chapter-card" :open="Boolean(search.trim()) || index < 3">
-          <summary>{{ chapter.root.name }} <span>{{ chapter.children.length }} 个知识点</span></summary>
-          <ul>
-            <li v-for="point in chapter.children" :key="point.id">{{ point.name }}</li>
-          </ul>
-        </details>
-      </div>
+      <div class="section-heading"><h2 id="catalog-title">课程章节</h2><span v-if="state.chaptersStatus === 'ready'">{{ state.chapters.length }} 个内置章节</span></div>
+      <p v-if="state.chaptersStatus === 'loading'" role="status">正在读取章节…</p>
+      <p v-else-if="state.chaptersStatus === 'error'" class="form-error">{{ state.chaptersError }} <button @click="reload">重试</button></p>
+      <template v-else>
+        <label class="catalog-search-label" for="catalog-search">搜索章节</label>
+        <input id="catalog-search" v-model="search" class="catalog-search" type="search" placeholder="输入章节名称">
+        <button class="text-button" :aria-pressed="!selectedChapter" @click="selectedChapter = ''">全部章节</button>
+        <div class="catalog-grid"><button v-for="chapter in chapters" :key="chapter.id" class="chapter-card" :aria-pressed="selectedChapter === chapter.id" @click="selectedChapter = chapter.id">{{ chapter.name }}</button></div>
+        <p v-if="!chapters.length" class="field-help">没有找到对应章节。</p>
+      </template>
     </section>
+
+    <DocumentPanel v-if="state.detail" :key="state.detail.id" :library="state.detail" :chapters="state.chapters" :chapter-id="selectedChapter" />
+
+
   </section>
 </template>

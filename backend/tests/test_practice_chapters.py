@@ -2,23 +2,21 @@ import json
 from uuid import UUID
 
 import pytest
-from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, text, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from test_documents import TestEmbedding, register, upload, wait_document
-from test_practice import answer_for, create, items, submit, wait_practice
+from test_practice import create, items, submit, wait_practice
 
 from capstone.core.settings import Settings
-from capstone.db.models import Question, User
+from capstone.db.models import Chapter, Document, Question, User
 from capstone.main import create_app
 from capstone.seed import seed_course_data
 from capstone.services.documents import create_document, queue_delete
 from capstone.services.storage import BlobStore
 
 
-class TopicGeneration:
+class ChapterGeneration:
     available = True
 
     def __init__(self, cited=False, before_review=None):
@@ -50,29 +48,33 @@ class TopicGeneration:
         )
 
 
-def test_topic_only_needs_no_catalog_and_reaches_wrong_questions_and_reports(
-    migrated_database, tmp_path
-):
-    generation = TopicGeneration()
+def test_chapter_requirements_reach_wrong_questions_and_reports(migrated_database, tmp_path):
+    generation = ChapterGeneration()
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings, generation_service=generation)) as client:
         _, headers = register(client)
         topic = "队列|FIFO"
-        exercise = create(client, headers, question_source="ai", topic=topic, count=1)
+        exercise = create(
+            client, headers, question_source="ai", generation_requirements=topic, count=1
+        )
         wait_practice(client, exercise["id"])
-        assert exercise["title"] == topic
+        assert exercise["title"] == "栈与队列"
         item = items(client, exercise["id"])[0]
-        assert item["knowledge_point_id"] is None
+        assert item["chapter_id"] == exercise["chapter_id"]
         result = submit(client, headers, item, "false").json()
         assert result["source_info"]["basis"] == "general_knowledge"
         assert result["source_info"]["citations"] == []
-        wrong = client.get("/api/v1/wrong-questions?search=FIFO").json()
-        assert wrong["total"] == 1 and wrong["items"][0]["topic"] == topic
+        wrong = client.get("/api/v1/wrong-questions?search=队列").json()
+        assert wrong["total"] == 1 and wrong["items"][0]["chapter_name"] == "栈与队列"
         assert client.get("/api/v1/wrong-questions?search=栈").json()["total"] == 0
         stats = client.get("/api/v1/learning/stats").json()
         assert stats["attempts"]["count"] == 1
-        assert stats["topics"][0]["error_count"] == 1
-        assert stats["topics"][0]["materials"] == []
+        assert "topics" not in stats
+        assert "unclassified" not in stats
+        assert (
+            next(ch for ch in stats["chapters"] if ch["name"] == "栈与队列")["attempts"]["count"]
+            == 1
+        )
         assert stats["question_types"]["true_false"]["count"] == 1
         assert client.get("/api/v1/learning/performance").status_code == 200
         assert len(generation.prompts) == 2
@@ -80,25 +82,23 @@ def test_topic_only_needs_no_catalog_and_reaches_wrong_questions_and_reports(
             "/api/v1/reports", headers=headers, json={"client_request_id": "topic-report"}
         ).json()
         exported = client.get(f"/api/v1/reports/{report['id']}/export").text
-        assert "队列\\|FIFO" in exported
+        assert "| 栈与队列 |" in exported
         assert "\n实际检索片段：[]" in generation.prompts[0][0]["content"]
         payload = json.loads(generation.prompts[0][1]["content"])
-        assert payload["topic"] == topic and "mode" not in payload
+        assert payload["requirements"] == topic and payload["chapter"] == "栈与队列"
+        assert "topic" not in payload
 
 
-def test_topic_or_material_is_required_and_invalid_requests_create_no_sessions(
-    migrated_database, tmp_path
-):
+def test_chapter_is_required_and_invalid_requests_create_no_sessions(migrated_database, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
-        for topic in ("", "   ", "\n\t"):
+        for topic in ("", "   ", "\n\t", "仅提供旧主题也必须选择章节"):
             response = client.post(
                 "/api/v1/practice-sessions",
                 headers=headers,
                 json={
                     "client_request_id": "empty-topic",
-                    "question_source": "ai",
                     "topic": topic,
                 },
             )
@@ -106,16 +106,19 @@ def test_topic_or_material_is_required_and_invalid_requests_create_no_sessions(
         assert client.get("/api/v1/practice-sessions").json()["total"] == 0
 
 
-def test_material_selection_is_private_current_and_supports_material_only_practice(
-    migrated_database, tmp_path
-):
+def test_chapter_material_selection_is_private_and_current(migrated_database, tmp_path):
     course = seed_course_data(migrated_database)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    generation = TopicGeneration(cited=True)
+    generation = ChapterGeneration(cited=True)
     with TestClient(
         create_app(settings, embedding_service=TestEmbedding(), generation_service=generation)
     ) as client:
         library, headers = register(client)
+        chapter_id = next(
+            point["id"]
+            for point in client.get("/api/v1/chapters").json()["items"]
+            if point["code"] == "stack-queue"
+        )
         other = TestClient(client.app)
         try:
             other_library, other_headers = register(other, "outsider")
@@ -143,30 +146,58 @@ def test_material_selection_is_private_current_and_supports_material_only_practi
                 headers=headers,
                 json={
                     "client_request_id": "private",
-                    "question_source": "ai",
+                    "chapter_id": chapter_id,
                     "document_ids": [private],
                 },
             )
             assert denied.status_code == 404
+            with Session(migrated_database) as session, session.begin():
+                other_chapter = session.scalar(select(Chapter.id).where(Chapter.code == "tree"))
+                session.get(Document, UUID(mine)).chapter_id = other_chapter
+            mismatch = client.post(
+                "/api/v1/practice-sessions",
+                headers=headers,
+                json={
+                    "client_request_id": "mismatched",
+                    "chapter_id": chapter_id,
+                    "document_ids": [mine],
+                },
+            )
+            assert (
+                mismatch.status_code == 422
+                and mismatch.json()["code"] == "MATERIAL_CHAPTER_MISMATCH"
+            )
+            assert (
+                client.get(
+                    f"/api/v1/knowledge-bases/{library}/documents",
+                    params={"chapter_id": str(other_chapter)},
+                ).json()["total"]
+                == 1
+            )
+            assert (
+                client.get(
+                    f"/api/v1/knowledge-bases/{library}/documents",
+                    params={"chapter_id": chapter_id},
+                ).json()["total"]
+                == 0
+            )
             exercise = create(client, headers, question_source="ai", count=1, document_ids=[public])
             wait_practice(client, exercise["id"])
-            assert exercise["title"] == "公共队列资料.md"
+            assert exercise["title"] == "栈与队列"
             item = items(client, exercise["id"])[0]
             result = submit(client, headers, item, "false").json()
             assert result["source_info"]["basis"] == "selected_materials"
             assert {source["document_id"] for source in result["source_info"]["citations"]} == {
                 public
             }
-            assert client.get("/api/v1/learning/stats").json()["topics"][0]["materials"] == [
-                "公共队列资料.md"
-            ]
+            assert "topics" not in client.get("/api/v1/learning/stats").json()
             assert client.delete("/api/v1/documents/" + mine, headers=headers).status_code == 202
             stale = client.post(
                 "/api/v1/practice-sessions",
                 headers=headers,
                 json={
                     "client_request_id": "deleted",
-                    "question_source": "ai",
+                    "chapter_id": chapter_id,
                     "document_ids": [mine],
                 },
             )
@@ -175,15 +206,25 @@ def test_material_selection_is_private_current_and_supports_material_only_practi
             other.close()
 
 
-def test_material_deleted_during_generation_is_not_published(migrated_database, tmp_path):
+@pytest.mark.parametrize("reclassify", [False, True])
+def test_material_changed_during_generation_is_not_published(
+    migrated_database, tmp_path, reclassify
+):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     target = {}
 
     def remove():
         with Session(migrated_database) as session:
-            queue_delete(session, UUID(target["document"]), target["user"])
+            if reclassify:
+                document = session.get(Document, UUID(target["document"]))
+                document.chapter_id = session.scalar(
+                    select(Chapter.id).where(Chapter.code == "tree")
+                )
+                session.commit()
+            else:
+                queue_delete(session, UUID(target["document"]), target["user"])
 
-    generation = TopicGeneration(cited=True, before_review=remove)
+    generation = ChapterGeneration(cited=True, before_review=remove)
     with TestClient(
         create_app(settings, embedding_service=TestEmbedding(), generation_service=generation)
     ) as client:
@@ -196,36 +237,9 @@ def test_material_deleted_during_generation_is_not_published(migrated_database, 
             client, headers, question_source="ai", count=1, document_ids=[target["document"]]
         )
         failed = wait_practice(client, exercise["id"], "failed")
-        assert failed["error_code"] == "PRACTICE_DOCUMENT_NOT_READY"
+        assert failed["error_code"] == (
+            "MATERIAL_CHAPTER_MISMATCH" if reclassify else "PRACTICE_DOCUMENT_NOT_READY"
+        )
         assert items(client, exercise["id"]) == []
         with Session(migrated_database) as session:
             assert session.scalar(select(func.count()).select_from(Question)) == 0
-
-
-def test_nullable_classification_migration_preserves_existing_attempts_and_triggers(
-    bank_database, migration_config, tmp_path
-):
-    command.downgrade(migration_config, "0010")
-    settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    with TestClient(create_app(settings)) as client:
-        _, headers = register(client)
-        exercise = create(client, headers, count=1)
-        item = items(client, exercise["id"])[0]
-        submit(client, headers, item, answer_for(bank_database, item, False))
-    with bank_database.connect() as connection:
-        before = {
-            table: connection.execute(text(f"SELECT * FROM {table} ORDER BY id")).all()
-            for table in ("questions", "practice_items", "attempts", "wrong_questions")
-        }
-    command.upgrade(migration_config, "head")
-    with bank_database.connect() as connection:
-        for table, expected in before.items():
-            assert connection.execute(text(f"SELECT * FROM {table} ORDER BY id")).all() == expected
-        assert connection.execute(text("PRAGMA foreign_key_check")).all() == []
-        assert connection.execute(text("PRAGMA foreign_keys")).scalar() == 1
-    with pytest.raises(IntegrityError), Session(bank_database) as session, session.begin():
-        session.execute(
-            update(Question)
-            .where(Question.id == UUID(item["question_id"]))
-            .values(knowledge_point_id=None)
-        )

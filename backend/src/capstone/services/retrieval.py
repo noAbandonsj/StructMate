@@ -43,7 +43,7 @@ def citation_info(chunk, document, number):
         "document_id": str(document.id),
         "chunk_id": str(chunk.id),
         "filename": document.filename,
-        "knowledge_point_id": str(chunk.knowledge_point_id) if chunk.knowledge_point_id else None,
+        "chapter_id": str(chunk.chapter_id) if chunk.chapter_id else None,
         "page_number": chunk.page_number,
         "heading": chunk.heading,
         "line_start": chunk.line_start,

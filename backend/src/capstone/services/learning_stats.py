@@ -7,12 +7,12 @@ from capstone.core.errors import ApiError
 from capstone.db.models import (
     Attempt,
     Conversation,
-    KnowledgePoint,
     Message,
     Question,
     WrongQuestion,
     utc_now,
 )
+from capstone.services.chapters import chapters as list_chapters
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 CATEGORIES = ("first_independent", "first_hinted", "repeat", "review")
@@ -47,9 +47,7 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
     rows = session.execute(
         select(
             Attempt,
-            Question.knowledge_point_id,
-            Question.source_type,
-            Question.source_info,
+            Question.chapter_id,
             Question.content,
         )
         .join(Question, Question.id == Attempt.question_id)
@@ -96,54 +94,25 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
             WrongQuestion.created_at <= cutoff,
         )
     ).all()
-    points = session.scalars(
-        select(KnowledgePoint).order_by(KnowledgePoint.sort_order, KnowledgePoint.code)
-    ).all()
-    codes = {point.id: point.code for point in points}
+    points = list_chapters(session)
     chapters = []
     for point in points:
-        if point.parent_id is not None:
-            continue
-        related = [
-            row[0]
-            for row in rows
-            if row[1] in codes
-            and (codes[row[1]] == point.code or codes[row[1]].startswith(point.code + "."))
-        ]
+        related = [row[0] for row in rows if row[1] == point.id]
         independent = [attempt for attempt in related if attempt.category == "first_independent"]
         chapters.append(
             {
-                "knowledge_point_id": str(point.id),
+                "chapter_id": str(point.id),
                 "name": point.name,
                 "attempts": measure(related),
                 "independent": measure(independent),
                 "evidence": "insufficient" if len(independent) < 5 else "sufficient",
             }
         )
-    topics = []
-    for topic in sorted({row[3].get("topic") for row in rows if row[3].get("topic")}):
-        related = [row for row in rows if row[3].get("topic") == topic]
-        independent = [row[0] for row in related if row[0].category == "first_independent"]
-        topics.append(
-            {
-                "name": topic,
-                "attempts": measure([row[0] for row in related]),
-                "independent": measure(independent),
-                "error_count": sum(not row[0].is_correct for row in related),
-                "materials": sorted(
-                    {
-                        doc["filename"]
-                        for row in related
-                        for doc in row[3].get("reference_documents", [])
-                    }
-                ),
-            }
-        )
     active_days = {attempt.created_at.astimezone(SHANGHAI).date() for attempt in attempts}
     active_days.update(row.created_at.astimezone(SHANGHAI).date() for row in questions)
     active_days.update(row.updated_at.astimezone(SHANGHAI).date() for row in answers)
     return {
-        "schema_version": 2,
+        "schema_version": 4,
         "from_date": from_date.isoformat(),
         "to_date": to_date.isoformat(),
         "time_zone": "Asia/Shanghai",
@@ -153,15 +122,10 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
             category: measure([attempt for attempt in attempts if attempt.category == category])
             for category in CATEGORIES
         },
-        "sources": {
-            source: measure([row[0] for row in rows if row[2] == source])
-            for source in ("bank", "ai")
-        },
         "hinted_attempt_count": sum(attempt.hinted for attempt in attempts),
-        "knowledge_points": chapters,
-        "topics": topics,
+        "chapters": chapters,
         "question_types": {
-            kind: measure([row[0] for row in rows if row[4]["type"] == kind])
+            kind: measure([row[0] for row in rows if row[2]["type"] == kind])
             for kind in ("single_choice", "true_false")
         },
         "learning": {
@@ -177,7 +141,7 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
             ),
             "current_pending": sum(wrong.status == "pending" for wrong in wrongs),
         },
-        "basis": "仅包含服务端已提交的有效作答；题库与 AI 题共同参与，AI 按保存的参考答案计分。"
+        "basis": "仅包含服务端已提交的有效作答，AI 练习按保存的参考答案计分。"
         "首次独立、提示、重复和复习分开；不估算学习时长。"
         "有效答疑不含检索未命中的资料不足回复，此类回复单独统计。",
     }

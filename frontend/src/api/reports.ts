@@ -1,5 +1,5 @@
 import { request } from './client'
-import type { Page } from './chat'
+import type { Page } from './client'
 import type { Practice } from './practice'
 import type { Config } from './chat'
 
@@ -8,11 +8,10 @@ export interface Measure { count: number; correct_count: number; accuracy: numbe
 export interface Stats {
   schema_version?: number
   from_date: string; to_date: string; time_zone: string; as_of: string
-  attempts: Measure; categories: Record<Category, Measure>; sources: Record<'bank' | 'ai', Measure>
+  attempts: Measure; categories: Record<Category, Measure>
   hinted_attempt_count: number
-  topics?: { name: string; attempts: Measure; independent: Measure; error_count: number; materials: string[] }[]
   question_types?: Record<'single_choice' | 'true_false', Measure>
-  knowledge_points: { knowledge_point_id: string; name: string; attempts: Measure; independent: Measure; evidence: string }[]
+  chapters: { chapter_id: string; name: string; attempts: Measure; independent: Measure; evidence: string }[]
   learning: { asked_questions: number; completed_answers: number; insufficient_materials?: number; active_days: number; conversation_count: number }
   wrong_questions: { new_in_range: number; current_pending: number }; basis: string
 }

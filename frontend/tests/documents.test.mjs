@@ -11,7 +11,7 @@ const response = (value, status = 200) => new Response(JSON.stringify(value), {
 })
 const library = (id, readonly = false) => ({ id, kind: readonly ? 'course' : 'personal', name: id, is_readonly: readonly, created_at: '2026-10-14T00:00:00Z' })
 const doc = (id, libraryId) => ({
-  id, knowledge_base_id: libraryId, knowledge_point_id: null, filename: '笔记.md',
+  id, knowledge_base_id: libraryId, chapter_id: null, filename: '笔记.md',
   file_type: 'md', size_bytes: 20, status: 'failed', stage: 'embedding',
   error_code: 'EMBEDDING_NOT_CONFIGURED', error_message: '未接通向量服务',
   retryable: true, source_info: null, created_at: '', updated_at: '',
@@ -153,8 +153,8 @@ test('course maintenance uses admin endpoints and transmits attribution without 
     const write = calls.find(call => call.options.method === 'POST')
     assert.ok(write.url.endsWith('/admin/course/documents'))
     assert.equal(write.options.body.get('author'), '作者')
-    assert.equal(write.options.body.get('knowledge_point_id'), 'point')
-    assert.deepEqual(view.state.filters, { search: '', status: '' })
+    assert.equal(write.options.body.get('chapter_id'), 'point')
+    assert.deepEqual(view.state.filters, { search: '', status: '', chapterId: '' })
     assert.equal(view.selected.value.is_readonly, true)
     auth.authState.account.user.role = 'user'
     assert.equal(await view.upload(new File(['hello'], 'notes.md'), 'point'), false)

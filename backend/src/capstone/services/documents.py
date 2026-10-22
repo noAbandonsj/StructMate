@@ -13,10 +13,10 @@ from capstone.db.models import (
     Document,
     DocumentTask,
     KnowledgeBase,
-    KnowledgePoint,
     utc_now,
 )
 from capstone.db.session import write_transaction
+from capstone.services.chapters import require_chapter
 from capstone.services.storage import BlobStore, validate_upload
 
 
@@ -65,13 +65,15 @@ def create_document(
     filename: str,
     data: bytes,
     maximum: int,
-    knowledge_point_id: UUID | None = None,
+    chapter_id: UUID | None = None,
     source_info: dict | None = None,
     *,
     course_actor_id: UUID | None = None,
     preserve_course_removals: bool = False,
 ) -> tuple[Document, bool]:
     name, kind = validate_upload(filename, data, maximum)
+    if chapter_id is not None:
+        require_chapter(session, chapter_id)
     digest = sha256(data).hexdigest()
     existing = session.scalar(
         select(Document).where(
@@ -80,8 +82,6 @@ def create_document(
     )
     if existing is not None:
         return existing, False
-    if knowledge_point_id is not None and session.get(KnowledgePoint, knowledge_point_id) is None:
-        raise ApiError(422, "KNOWLEDGE_POINT_INVALID", "所选知识点不存在，请重新选择。")
     session.rollback()
     document_id = uuid4()
     key = store.save(document_id, kind, data)
@@ -118,7 +118,7 @@ def create_document(
                 index_revision=1,
                 status="processing",
                 stage="queued",
-                knowledge_point_id=knowledge_point_id,
+                chapter_id=chapter_id,
                 source_info=source_info,
             )
             session.add(document)

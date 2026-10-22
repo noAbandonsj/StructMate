@@ -11,8 +11,8 @@ from sqlalchemy import select
 
 from capstone.db.models import (
     Attempt,
+    Chapter,
     Document,
-    KnowledgePoint,
     PracticeItem,
     Question,
     WrongQuestion,
@@ -23,10 +23,7 @@ def snapshot(question):
     return deepcopy(
         {
             **question.content,
-            "source_type": question.source_type,
-            "knowledge_point_id": str(question.knowledge_point_id)
-            if question.knowledge_point_id
-            else None,
+            "chapter_id": str(question.chapter_id) if question.chapter_id else None,
             "difficulty": question.difficulty,
             "source_info": question.source_info,
         }
@@ -53,7 +50,6 @@ def attempt_info(session, attempt, item=None):
         "created_at": attempt.created_at,
         "reference_answer": item.snapshot["answer"],
         "explanation": item.snapshot["explanation"],
-        "source_type": item.snapshot["source_type"],
         "source_info": current_source_info(session, item.snapshot["source_info"]),
         "wrong_question_id": wrong.id if wrong else None,
     }
@@ -70,19 +66,26 @@ def item_info(session, item):
         "type": content["type"],
         "stem": content["stem"],
         "options": content["options"],
-        "source_type": content["source_type"],
         "difficulty": content["difficulty"],
-        "knowledge_point_id": content["knowledge_point_id"],
+        "chapter_id": question.chapter_id,
         "hinted": item.hinted_at is not None,
         "hint": content["hint"] if item.hinted_at else None,
         "is_valid": question.is_valid,
         "disabled_reason": question.disabled_reason,
         "attempt": attempt_info(session, attempt, item) if attempt else None,
-        "feedback": item.feedback,
     }
 
 
 def practice_info(session, practice):
+    identifiers = session.scalars(
+        select(Question.chapter_id)
+        .join(PracticeItem)
+        .where(PracticeItem.practice_session_id == practice.id)
+        .distinct()
+    ).all()
+    candidate = practice.settings.get("chapter_id")
+    chapter_id = UUID(candidate) if candidate else identifiers[0] if len(identifiers) == 1 else None
+    chapter = session.get(Chapter, chapter_id) if chapter_id else None
     rows = session.execute(
         select(Question.is_valid, Attempt)
         .select_from(PracticeItem)
@@ -92,26 +95,15 @@ def practice_info(session, practice):
     ).all()
     attempts = [attempt for valid, attempt in rows if valid and attempt and attempt.is_valid]
     total = sum(valid for valid, _ in rows)
-    title = practice.settings.get("topic", "")
+    title = chapter.name if chapter else ""
     if not title:
-        identifiers = practice.settings.get("knowledge_point_ids", [])
-        names = (
-            session.scalars(
-                select(KnowledgePoint.name).where(
-                    KnowledgePoint.id.in_([UUID(value) for value in identifiers])
-                )
-            ).all()
-            if identifiers
-            else []
-        )
-        title = "、".join(names) or (
-            "错题复习" if practice.mode == "review" else "数据结构综合练习"
-        )
+        title = "错题复习" if practice.mode == "review" else "数据结构综合练习"
     return {
         "title": title,
+        "chapter_id": chapter.id if chapter else None,
+        "chapter_name": chapter.name if chapter else None,
         "id": practice.id,
         "mode": practice.mode,
-        "question_source": practice.question_source,
         "settings": practice.settings,
         "source_conversation_id": practice.source_conversation_id,
         "status": practice.status,
@@ -129,6 +121,7 @@ def practice_info(session, practice):
 
 def wrong_info(session, wrong, include_history=False):
     question = session.get(Question, wrong.question_id)
+    chapter = session.get(Chapter, question.chapter_id) if question.chapter_id else None
     attempts = session.scalars(
         select(Attempt)
         .where(Attempt.user_id == wrong.user_id, Attempt.question_id == wrong.question_id)
@@ -137,10 +130,9 @@ def wrong_info(session, wrong, include_history=False):
     result = {
         "id": wrong.id,
         "question_id": question.id,
-        "knowledge_point_id": question.knowledge_point_id,
-        "topic": question.source_info.get("topic", ""),
+        "chapter_id": question.chapter_id,
+        "chapter_name": chapter.name if chapter else None,
         "stem": question.content["stem"],
-        "source_type": question.source_type,
         "status": wrong.status,
         "correct_days": wrong.correct_days,
         "last_correct_date": wrong.last_correct_date,

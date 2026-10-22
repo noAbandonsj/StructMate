@@ -4,11 +4,6 @@
     "title": "线性表：接口与存储",
     "path": "course/linear-list.md",
     "sha256": "f61c41fd59ebfb3224670b5e0d2a84d9ffebb3074f96996eb93197ec25a7bd3d",
-    "knowledge_point_codes": [
-      "linear-list.definition",
-      "linear-list.sequential",
-      "linear-list.linked"
-    ],
     "source_ids": [
       "ods-list",
       "ods-array",
@@ -17,41 +12,35 @@
       "ods-single"
     ],
     "adaptation": "中文整理并加入项目自定义例子及明确教学约定，非逐字翻译",
-    "sha256_format": "utf8-lf"
+    "sha256_format": "utf8-lf",
+    "chapter_code": "linear-list"
   },
   {
     "code": "stack-queue",
     "title": "栈与队列：次序和边界",
     "path": "course/stack-queue.md",
     "sha256": "d00b44bdbd366e3cd179016524f93cf783505f852075710b2c0a67f7ae06923f",
-    "knowledge_point_codes": [
-      "stack-queue.stack",
-      "stack-queue.queue",
-      "stack-queue.circular-queue"
-    ],
     "source_ids": [
       "ods-list",
       "ods-array-queue",
       "ods-single"
     ],
     "adaptation": "中文整理并加入项目自定义例子及明确教学约定，非逐字翻译",
-    "sha256_format": "utf8-lf"
+    "sha256_format": "utf8-lf",
+    "chapter_code": "stack-queue"
   },
   {
     "code": "binary-tree",
     "title": "二叉树：结构与遍历",
     "path": "course/binary-tree.md",
     "sha256": "f33537a3acc5a438dcd6488e5bff9b7f437d9bf424b0c040bee092f6edb54dff",
-    "knowledge_point_codes": [
-      "tree.binary-tree",
-      "tree.traversal"
-    ],
     "source_ids": [
       "ods-tree",
       "ods-tree-algorithms",
       "opendsa-traversals"
     ],
     "adaptation": "中文整理并加入项目自定义例子及明确教学约定，非逐字翻译",
-    "sha256_format": "utf8-lf"
+    "sha256_format": "utf8-lf",
+    "chapter_code": "tree"
   }
 ]

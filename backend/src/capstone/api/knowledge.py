@@ -1,19 +1,18 @@
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 
-from capstone.api.schemas import Page
+from capstone.api.schemas import Page, PageNumber, PageSize
 from capstone.core.auth import AuthenticatedSession, DatabaseSession, no_store
+from capstone.core.chapters import CHAPTER_CODES
 from capstone.core.knowledge import get_readable_base, readable_bases
-from capstone.db.models import KnowledgeBase, KnowledgePoint
+from capstone.db.models import Chapter, KnowledgeBase
 
 router = APIRouter(tags=["knowledge"], dependencies=[Depends(no_store)])
-PageNumber = Annotated[int, Query(ge=1)]
-PageSize = Annotated[int, Query(ge=1, le=100)]
 
 
 class LibraryInfo(BaseModel):
@@ -24,12 +23,11 @@ class LibraryInfo(BaseModel):
     created_at: datetime
 
 
-class PointInfo(BaseModel):
+class ChapterInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     code: str
     name: str
-    parent_id: UUID | None
     sort_order: int
 
 
@@ -74,22 +72,24 @@ def base_detail(
     return library_info(get_readable_base(session, library_id, current.user_id))
 
 
-@router.get("/knowledge-points", response_model=Page[PointInfo])
-def list_points(
+@router.get("/chapters", response_model=Page[ChapterInfo])
+def list_chapters(
     current: AuthenticatedSession,
     session: DatabaseSession,
     page: PageNumber = 1,
     page_size: PageSize = 100,
-) -> Page[PointInfo]:
-    total = session.scalar(select(func.count()).select_from(KnowledgePoint))
+) -> Page[ChapterInfo]:
+    predicate = (Chapter.code.in_(CHAPTER_CODES),)
+    total = session.scalar(select(func.count()).select_from(Chapter).where(*predicate))
     points = session.scalars(
-        select(KnowledgePoint)
-        .order_by(KnowledgePoint.sort_order, KnowledgePoint.code, KnowledgePoint.id)
+        select(Chapter)
+        .where(*predicate)
+        .order_by(Chapter.sort_order, Chapter.code, Chapter.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
     return Page(
-        items=[PointInfo.model_validate(point) for point in points],
+        items=[ChapterInfo.model_validate(point) for point in points],
         page=page,
         page_size=page_size,
         total=total,

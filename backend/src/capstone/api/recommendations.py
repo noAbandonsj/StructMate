@@ -13,8 +13,8 @@ router = APIRouter(tags=["recommendations"], dependencies=[Depends(no_store)])
 def recommend(
     current: AuthenticatedSession,
     session: DatabaseSession,
-    knowledge_point_id: UUID | None = None,
+    chapter_id: UUID | None = None,
     difficulty: Literal["basic", "intermediate", "advanced"] = "basic",
     limit: Annotated[int, Query(ge=1, le=12)] = 6,
 ):
-    return recommendations(session, current.user_id, knowledge_point_id, difficulty, limit)
+    return recommendations(session, current.user_id, chapter_id, difficulty, limit)

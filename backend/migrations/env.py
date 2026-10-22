@@ -6,7 +6,7 @@ from sqlalchemy.engine import URL
 
 from capstone.core.settings import Settings
 from capstone.db.base import Base
-from capstone.db.models import AuthSession, KnowledgeBase, KnowledgePoint, User  # noqa: F401
+from capstone.db.models import AuthSession, Chapter, KnowledgeBase, User  # noqa: F401
 from capstone.db.session import create_database_engine
 from capstone.db.types import UTCDateTime
 

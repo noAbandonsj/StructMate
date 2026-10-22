@@ -5,7 +5,7 @@ let server, vue, auth, practice, wrong
 const originalFetch = globalThis.fetch, originalSession = globalThis.sessionStorage, originalLocal = globalThis.localStorage
 const response = (value, status = 200) => new Response(JSON.stringify(value), { status })
 const page = items => ({ items, total: items.length, page: 1, page_size: 20 })
-const session = id => ({ id, mode: 'chapter', question_source: 'bank', status: 'ready', settings: {}, actual_count: 1, effective_count: 1, submitted_count: 0 })
+const session = id => ({ id, mode: 'chapter', status: 'ready', settings: {}, actual_count: 1, effective_count: 1, submitted_count: 0 })
 const item = id => ({ id, question_id: id, options: [{ key: 'A', text: '选项 A' }, { key: 'B', text: '选项 B' }], attempt: null, is_valid: true, hinted: false, hint: null })
 const account = id => ({ user: { id }, csrf_token: 'test-' + id })
 function storage() {
@@ -27,8 +27,8 @@ async function until(predicate) {
   assert.ok(predicate(), 'state did not settle')
 }
 function defaults(url) {
-  if (url.includes('/practice-sessions/materials?')) return Promise.resolve(response(page([])))
-  if (url.includes('/knowledge-points')) return Promise.resolve(response(page([])))
+  if (url.includes('/practice-sessions/materials?')) return Promise.resolve(response(page([{ id: 'my-notes', filename: '队列笔记', chapter_id: 'stack', kind: 'personal' }])))
+  if (url.includes('/chapters')) return Promise.resolve(response(page([{ id: 'stack', code: 'stack-queue', name: '栈与队列' }, { id: 'tree', code: 'tree', name: '树与二叉树' }])))
   if (url.includes('/learning/performance')) return Promise.resolve(response({ items: [], window_days: 30 }))
   if (url.endsWith('/config')) return Promise.resolve(response({ generation_available: false }))
   if (url.includes('/practice-sessions?')) return Promise.resolve(response(page([session('one')])))
@@ -67,40 +67,60 @@ test('a failed group submission preserves the selected option and request key ac
     assert.deepEqual(posted[0].answers, [{ practice_item_id: 'question', answer: 'A' }])
   } finally { restored.effect.stop() }
 })
-test('legacy bank preferences create AI exercises while preserving existing practice history', async () => {
+test('chapter selection and material ownership are checked before creating exercises', async () => {
+  let posts = 0
+  globalThis.fetch = (url, options) => {
+    if (options?.method === 'POST') posts++
+    return defaults(url)
+  }
+  const view = scope('chapter-guard')
+  try {
+    await until(() => view.state.ready)
+    await view.create()
+    assert.match(view.state.error, /章节/)
+    view.state.form.chapter_id = 'tree'
+    view.state.form.document_ids = ['my-notes']
+    await view.create()
+    assert.match(view.state.error, /其他章节/)
+    assert.equal(posts, 0)
+  } finally { view.effect.stop() }
+})
+
+test('creation sends current chapter settings while preserving the displayed session', async () => {
   const posted = []
   globalThis.localStorage.setItem('capstone.practice.preferences.mode-owner', JSON.stringify({
-    question_source: 'bank', mode: 'adaptive', count: 8, difficulty: 'intermediate', knowledge_point_ids: ['tree'],
+    count: 8, difficulty: 'intermediate',
   }))
   globalThis.fetch = (url, options) => {
     if (url.endsWith('/practice-sessions') && options?.method === 'POST') {
       posted.push(JSON.parse(options.body))
-      return Promise.resolve(response({ ...session('new-ai'), question_source: 'ai' }))
+      return Promise.resolve(response({ ...session('new-ai') }))
     }
     return defaults(url)
   }
   const view = scope('mode-owner')
   try {
     await until(() => view.state.practice)
-    assert.equal(view.state.form.question_source, 'ai')
+    assert.equal(view.state.form.question_source, undefined)
     assert.equal(view.state.form.mode, undefined)
     assert.equal(view.state.form.count, 8)
     assert.equal(view.state.form.difficulty, 'intermediate')
-    assert.equal(view.state.form.knowledge_point_ids, undefined)
-    view.state.form.topic = '二叉树遍历'
+    assert.equal(view.state.form.chapter_ids, undefined)
+    view.state.form.chapter_id = 'tree'
     view.state.form.generation_requirements = '概念与复杂度'
-    assert.equal(view.state.practice.question_source, 'bank')
+    assert.equal(view.state.practice.id, 'one')
     await view.create()
-    assert.equal(posted[0].question_source, 'ai')
+    assert.equal(posted[0].question_source, undefined)
     assert.equal(posted[0].generation_requirements, '概念与复杂度')
     assert.equal(posted[0].mode, undefined)
-    assert.equal(posted[0].topic, '二叉树遍历')
+    assert.equal(posted[0].chapter_id, 'tree')
+    assert.equal(posted[0].topic, undefined)
     assert.deepEqual(posted[0].document_ids, [])
     assert.equal(posted[0].count, 8)
-    assert.equal(view.state.practice.question_source, 'bank')
+    assert.equal(view.state.practice.id, 'one')
   } finally { view.effect.stop() }
   const restored = scope('mode-owner')
-  try { assert.equal(restored.state.form.question_source, 'ai') } finally { restored.effect.stop() }
+  try { assert.equal(restored.state.form.question_source, undefined) } finally { restored.effect.stop() }
 })
 test('an unsubmitted choice survives remount and is cleared on sign out', async () => {
   globalThis.fetch = defaults
@@ -118,7 +138,7 @@ test('an unsubmitted choice survives remount and is cleared on sign out', async 
   } finally { restored.effect.stop() }
 })
 
-test('a lost creation response keeps the topic, selected materials and request key', async () => {
+test('a lost creation response keeps the chapter, requirements, materials and request key', async () => {
   const posted = []
   globalThis.fetch = (url, options) => {
     if (url.endsWith('/practice-sessions') && options?.method === 'POST') {
@@ -129,21 +149,24 @@ test('a lost creation response keeps the topic, selected materials and request k
   const view = scope('topic-retry-owner', '')
   try {
     await until(() => view.state.ready)
-    view.state.form.topic = '  循环队列判空  '
+    view.state.form.chapter_id = 'stack'
+    view.state.form.generation_requirements = '  循环队列判空  '
     view.state.form.document_ids = ['my-notes']
     await view.create(); await view.create()
-    assert.equal(posted[0].topic, '循环队列判空')
+    assert.equal(posted[0].generation_requirements, '循环队列判空')
+    assert.equal(posted[0].chapter_id, 'stack')
     assert.deepEqual(posted[0].document_ids, ['my-notes'])
     assert.equal(posted[0].client_request_id, posted[1].client_request_id)
     assert.ok(view.state.error)
-    assert.equal(JSON.parse(globalThis.localStorage.getItem('capstone.practice.preferences.topic-retry-owner')).topic, '')
-    view.state.form.topic = '二叉树遍历'
+    assert.equal(JSON.parse(globalThis.localStorage.getItem('capstone.practice.preferences.topic-retry-owner')).generation_requirements, '')
+    view.state.form.generation_requirements = '队列应用'
     await view.create()
     assert.notEqual(posted[0].client_request_id, posted[2].client_request_id)
   } finally { view.effect.stop() }
   const restored = scope('topic-retry-owner', '')
   try {
-    assert.equal(restored.state.form.topic, '二叉树遍历')
+    assert.equal(restored.state.form.generation_requirements, '队列应用')
+    assert.equal(restored.state.form.chapter_id, 'stack')
     assert.deepEqual(restored.state.form.document_ids, ['my-notes'])
   } finally { restored.effect.stop() }
 })

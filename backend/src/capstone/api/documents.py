@@ -8,8 +8,7 @@ from sqlalchemy import func, select
 from starlette.datastructures import UploadFile
 from starlette.responses import FileResponse, PlainTextResponse, Response
 
-from capstone.api.knowledge import PageNumber, PageSize
-from capstone.api.schemas import Page
+from capstone.api.schemas import Page, PageNumber, PageSize
 from capstone.core.auth import (
     AuthenticatedSession,
     DatabaseSession,
@@ -31,7 +30,7 @@ class DocumentInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     knowledge_base_id: UUID
-    knowledge_point_id: UUID | None
+    chapter_id: UUID | None
     filename: str
     file_type: Literal["pdf", "txt", "md"]
     size_bytes: int
@@ -80,7 +79,7 @@ class ChunkInfo(BaseModel):
     heading: str | None
     line_start: int | None
     line_end: int | None
-    knowledge_point_id: UUID | None
+    chapter_id: UUID | None
 
 
 def info(document: Document) -> DocumentInfo:
@@ -103,9 +102,12 @@ def list_documents(
     session: DatabaseSession,
     page: PageNumber = 1,
     page_size: PageSize = 20,
+    chapter_id: UUID | None = None,
 ) -> Page[DocumentInfo]:
     get_readable_base(session, library_id, current.user_id)
     predicate = (Document.knowledge_base_id == library_id) & (Document.status != "deleted")
+    if chapter_id:
+        predicate &= Document.chapter_id == chapter_id
     total = session.scalar(select(func.count()).select_from(Document).where(predicate))
     documents = session.scalars(
         select(Document)
@@ -137,7 +139,7 @@ def list_documents(
                         "required": ["file"],
                         "properties": {
                             "file": {"type": "string", "format": "binary"},
-                            "knowledge_point_id": {"type": "string", "format": "uuid"},
+                            "chapter_id": {"type": "string", "format": "uuid"},
                         },
                     },
                 }
@@ -157,16 +159,16 @@ async def upload_document(
         raise ApiError(403, "COURSE_READONLY", "只能向自己的个人知识库上传资料。")
     session.rollback()
     async with request.form(max_files=1, max_fields=1) as form:
-        if set(form.keys()) - {"file", "knowledge_point_id"}:
+        if set(form.keys()) - {"file", "chapter_id"}:
             raise ApiError(422, "UPLOAD_FIELDS_INVALID", "上传包含不支持的字段。")
         file = form.get("file")
         if not isinstance(file, UploadFile):
             raise ApiError(422, "FILE_REQUIRED", "请选择要上传的资料。")
-        point = form.get("knowledge_point_id")
+        point = form.get("chapter_id")
         try:
             point_id = UUID(point) if isinstance(point, str) and point else None
         except ValueError:
-            raise ApiError(422, "KNOWLEDGE_POINT_INVALID", "所选知识点无效。") from None
+            raise ApiError(422, "CHAPTER_INVALID", "所选章节无效。") from None
         maximum = request.app.state.settings.upload_max_mib * 1024 * 1024
         data = await file.read(maximum + 1)
         document, created = create_document(

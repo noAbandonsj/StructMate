@@ -11,18 +11,18 @@ const expired = (error: unknown) => error instanceof ApiError && error.status ==
 export function useKnowledge() {
   const state = reactive<{
     libraries: api.LibraryInfo[]
-    points: api.KnowledgePoint[]
+    chapters: api.Chapter[]
     librariesStatus: Status
-    pointsStatus: Status
+    chaptersStatus: Status
     librariesError: string
-    pointsError: string
+    chaptersError: string
     selectedId: string | null
     detail: api.LibraryInfo | null
     detailStatus: Status
     detailError: string
   }>({
-    libraries: [], points: [], librariesStatus: 'loading', pointsStatus: 'loading',
-    librariesError: '', pointsError: '', selectedId: null, detail: null,
+    libraries: [], chapters: [], librariesStatus: 'loading', chaptersStatus: 'loading',
+    librariesError: '', chaptersError: '', selectedId: null, detail: null,
     detailStatus: 'ready', detailError: '',
   })
   let revision = 0
@@ -65,14 +65,14 @@ export function useKnowledge() {
     detailRevision++
     const controller = new AbortController()
     listController = controller
-    state.librariesStatus = state.pointsStatus = 'loading'
-    state.librariesError = state.pointsError = ''
+    state.librariesStatus = state.chaptersStatus = 'loading'
+    state.librariesError = state.chaptersError = ''
     state.detail = null
-    const [libraries, points] = await Promise.allSettled([
-      api.getLibraries(controller.signal), api.getPoints(controller.signal),
+    const [libraries, chapters] = await Promise.allSettled([
+      api.getLibraries(controller.signal), api.getChapters(controller.signal),
     ])
     if (startedAt !== revision || userId !== authState.account?.user.id) return
-    if ([libraries, points].some(result => result.status === 'rejected' && expired(result.reason))) {
+    if ([libraries, chapters].some(result => result.status === 'rejected' && expired(result.reason))) {
       await restoreAccount(true)
       return
     }
@@ -83,12 +83,12 @@ export function useKnowledge() {
       state.librariesStatus = 'error'
       state.librariesError = message(libraries.reason)
     }
-    if (points.status === 'fulfilled') {
-      state.points = points.value
-      state.pointsStatus = 'ready'
+    if (chapters.status === 'fulfilled') {
+      state.chapters = chapters.value
+      state.chaptersStatus = 'ready'
     } else {
-      state.pointsStatus = 'error'
-      state.pointsError = message(points.reason)
+      state.chaptersStatus = 'error'
+      state.chaptersError = message(chapters.reason)
     }
     if (libraries.status === 'fulfilled') {
       const selected = state.libraries.find(library => library.id === state.selectedId)
@@ -105,7 +105,7 @@ export function useKnowledge() {
     listController?.abort()
     detailController?.abort()
     state.libraries = []
-    state.points = []
+    state.chapters = []
     state.selectedId = null
     state.detail = null
     state.detailError = ''
@@ -119,7 +119,7 @@ export function useKnowledge() {
     listController?.abort()
     detailController?.abort()
     state.libraries = []
-    state.points = []
+    state.chapters = []
     state.selectedId = null
     state.detail = null
   })

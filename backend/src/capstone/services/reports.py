@@ -87,12 +87,6 @@ def report_markdown(report):
         "repeat": "重复练习",
         "review": "错题复习",
     }
-    answer_label = "有效答疑" if data.get("schema_version") == 2 else "完成回复（旧口径）"
-    answer_basis = (
-        f"资料不足 {data['learning'].get('insufficient_materials', 0)} 次，未计入有效答疑。"
-        if data.get("schema_version") == 2
-        else "此快照采用旧口径，完成回复可能包含资料不足；原数据保留，可生成新报告。"
-    )
     lines = [
         "# 学习报告",
         "",
@@ -107,7 +101,8 @@ def report_markdown(report):
         f"- 范围内新增错题：{data['wrong_questions']['new_in_range']} 道",
         f"- 截止时当前待复习：{data['wrong_questions']['current_pending']} 道（不限日期范围）",
         f"- 提问：{data['learning']['asked_questions']} 次；"
-        f"{answer_label}：{data['learning']['completed_answers']} 次；{answer_basis}",
+        f"有效答疑：{data['learning']['completed_answers']} 次；"
+        f"资料不足 {data['learning']['insufficient_materials']} 次",
         f"- 实际记录活跃天数：{data['learning']['active_days']} 天；未估算学习时长",
         "",
         "| 作答类别 | 次数 | 答对 | 正确率 |",
@@ -118,26 +113,21 @@ def report_markdown(report):
         lines.append(
             f"| {label} | {item['count']} | {item['correct_count']} | {percent(item['accuracy'])} |"
         )
-    if data.get("topics"):
-        lines.extend(
-            [
-                "",
-                "## 练习主题",
-                "",
-                "| 主题 | 作答 | 错误 | 参考资料 |",
-                "| --- | --- | --- | --- |",
-            ]
+    lines.extend(
+        [
+            "",
+            "## 章节统计",
+            "",
+            "| 章节 | 作答 | 独立新题 | 独立正确率 |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for chapter in data["chapters"]:
+        lines.append(
+            f"| {chapter['name']} | {chapter['attempts']['count']} | "
+            f"{chapter['independent']['count']} | "
+            f"{percent(chapter['independent']['accuracy'])} |"
         )
-
-        def cell(value):
-            return value.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
-
-        for topic in data["topics"]:
-            lines.append(
-                f"| {cell(topic['name'])} | {topic['attempts']['count']} | "
-                f"{topic['error_count']} | "
-                f"{cell('、'.join(topic['materials']) or 'AI 通用知识')} |"
-            )
     lines.extend(
         [
             "",

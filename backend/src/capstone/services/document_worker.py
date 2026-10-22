@@ -109,7 +109,7 @@ class DocumentWorker:
                 document.file_type,
                 library.id,
                 library.owner_id,
-                document.knowledge_point_id,
+                document.chapter_id,
             )
 
     def _live(self, session, work: Work) -> Document:
@@ -146,7 +146,7 @@ class DocumentWorker:
                 heading=fragment.heading,
                 line_start=fragment.line_start,
                 line_end=fragment.line_end,
-                knowledge_point_id=work.point_id,
+                chapter_id=work.point_id,
             )
             for position, fragment in enumerate(fragments)
         ]

@@ -3,7 +3,7 @@ import { request } from './client'
 export interface DocumentInfo {
   id: string
   knowledge_base_id: string
-  knowledge_point_id: string | null
+  chapter_id: string | null
   filename: string
   file_type: 'pdf' | 'txt' | 'md'
   size_bytes: number
@@ -34,9 +34,10 @@ export function getUploadConfig(signal: AbortSignal): Promise<UploadConfig> {
   return request('/documents/upload-config', { signal })
 }
 
-export function getDocuments(libraryId: string, page: number, signal: AbortSignal, management = false, filters = { search: '', status: '' }): Promise<DocumentPage> {
+export function getDocuments(libraryId: string, page: number, signal: AbortSignal, management = false, filters = { search: '', status: '', chapterId: '' }): Promise<DocumentPage> {
   const path = management ? '/admin/course/documents' : '/knowledge-bases/' + encodeURIComponent(libraryId) + '/documents'
   const query = new URLSearchParams({ page: String(page), page_size: '20' })
+  if (filters.chapterId) query.set('chapter_id', filters.chapterId)
   if (management && filters.search) query.set('search', filters.search)
   if (management && filters.status) query.set('status', filters.status)
   return request(path + '?' + query, { signal })
@@ -53,12 +54,12 @@ function documentPath(id: string, management = false) {
 export interface Attribution { author: string; source: string; license: string }
 
 export function uploadDocument(
-  libraryId: string, file: File, pointId: string, csrf: string, signal: AbortSignal,
+  libraryId: string, file: File, chapterId: string, csrf: string, signal: AbortSignal,
   management = false, attribution?: Attribution,
 ): Promise<{ document: DocumentInfo; duplicate: boolean }> {
   const body = new FormData()
   body.append('file', file)
-  if (pointId) body.append('knowledge_point_id', pointId)
+  if (chapterId) body.append('chapter_id', chapterId)
   if (management && attribution) {
     body.append('author', attribution.author)
     body.append('source', attribution.source)

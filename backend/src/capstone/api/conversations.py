@@ -11,8 +11,7 @@ from sqlalchemy import func, select
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import StreamingResponse
 
-from capstone.api.knowledge import PageNumber, PageSize
-from capstone.api.schemas import Page
+from capstone.api.schemas import Page, PageNumber, PageSize
 from capstone.core.auth import (
     AuthenticatedSession,
     DatabaseSession,
@@ -45,7 +44,7 @@ class ConversationInput(BaseModel):
     title: str = Field(default="新的学习", min_length=1, max_length=100)
     scope: Scope = "combined"
     document_ids: list[UUID] = Field(default_factory=list, max_length=100)
-    knowledge_point_id: UUID | None = None
+    chapter_id: UUID | None = None
 
     @field_validator("title")
     @classmethod
@@ -65,12 +64,12 @@ class ConversationPatch(BaseModel):
     title: str = Field(default=None, min_length=1, max_length=100)
     scope: Scope = None
     document_ids: list[UUID] = Field(default=None, max_length=100)
-    knowledge_point_id: UUID | None = None
+    chapter_id: UUID | None = None
     archived: bool = None
 
     @model_validator(mode="after")
     def reject_null(self):
-        for field in self.model_fields_set - {"knowledge_point_id"}:
+        for field in self.model_fields_set - {"chapter_id"}:
             if getattr(self, field) is None:
                 raise ValueError("设置值不能为空")
         if "title" in self.model_fields_set and not self.title.strip():
@@ -92,7 +91,7 @@ class ConversationInfo(BaseModel):
     title: str
     scope: Scope
     document_ids: list[str]
-    knowledge_point_id: UUID | None
+    chapter_id: UUID | None
     archived: bool
     created_at: datetime
     updated_at: datetime

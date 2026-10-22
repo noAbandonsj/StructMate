@@ -1,10 +1,10 @@
 import { onScopeDispose, reactive, watch, type Ref } from 'vue'
 import * as api from '../api/recommendations'
-import { getPoints, type KnowledgePoint } from '../api/knowledge'
+import { getChapters, type Chapter } from '../api/knowledge'
 import { ApiError } from '../api/client'
 import { authState, restoreAccount } from './auth'
 export function useRecommendations(context: Ref<string>) {
-  const state = reactive({ items: [] as api.Recommendation[], points: [] as KnowledgePoint[],
+  const state = reactive({ items: [] as api.Recommendation[], chapters: [] as Chapter[],
     point: '', difficulty: 'basic', basis: '', loading: false, error: '',
     preview: null as { item: api.Recommendation; chunk: api.Chunk } | null, previewLoading: false, previewError: '',
   })
@@ -24,8 +24,8 @@ export function useRecommendations(context: Ref<string>) {
     const signal = reader.signal, current = () => valid(stamp, user) && version === readVersion
     state.loading = true; state.error = ''; state.items = []
     try {
-      const [result, points] = await Promise.all([api.list(state.point, state.difficulty, signal), getPoints(signal)])
-      if (current()) { state.items = result.items; state.basis = result.basis; state.points = points }
+      const [result, chapters] = await Promise.all([api.list(state.point, state.difficulty, signal), getChapters(signal)])
+      if (current()) { state.items = result.items; state.basis = result.basis; state.chapters = chapters }
     } catch (error) { if (current() && !signal.aborted) await fail(error) }
     finally { if (current()) state.loading = false }
   }
@@ -43,10 +43,10 @@ export function useRecommendations(context: Ref<string>) {
   }
   watch([() => authState.account?.user.id, context], () => {
     epoch++; readVersion++; reader.abort(); closePreview()
-    state.items = []; state.points = []; state.error = ''; state.basis = ''; state.loading = false
+    state.items = []; state.chapters = []; state.error = ''; state.basis = ''; state.loading = false
     state.point = context.value; state.difficulty = 'basic'
     if (authState.account) void reload()
   }, { immediate: true })
-  onScopeDispose(() => { disposed = true; epoch++; reader.abort(); closePreview(); state.items = []; state.points = [] })
+  onScopeDispose(() => { disposed = true; epoch++; reader.abort(); closePreview(); state.items = []; state.chapters = [] })
   return { state, reload, read, closePreview }
 }

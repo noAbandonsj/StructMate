@@ -11,14 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from capstone.core.settings import Settings
-from capstone.db.models import KnowledgePoint, Resource
+from capstone.db.models import Chapter, Resource
 from capstone.db.session import create_database_engine, write_transaction
 
 
 class ResourceData(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9-]+$")
-    knowledge_point_code: str
+    chapter_code: str
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(min_length=1, max_length=2000)
     url: HttpUrl
@@ -46,12 +46,12 @@ def import_resources(engine, packet):
         raise ValueError("资源编号重复")
     added = updated = skipped = 0
     with Session(engine) as session, write_transaction(session):
-        points = {point.code: point.id for point in session.scalars(select(KnowledgePoint))}
-        if any(item.knowledge_point_code not in points for item in entries):
-            raise ValueError("资源知识点不存在，请先初始化目录")
+        points = {point.code: point.id for point in session.scalars(select(Chapter))}
+        if any(item.chapter_code not in points for item in entries):
+            raise ValueError("资源章节不存在，请先初始化目录")
         for item in entries:
             values = {
-                "knowledge_point_id": points[item.knowledge_point_code],
+                "chapter_id": points[item.chapter_code],
                 "title": item.title,
                 "description": item.description,
                 "url": str(item.url),

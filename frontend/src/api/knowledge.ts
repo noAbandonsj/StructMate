@@ -1,3 +1,4 @@
+import type { Page } from './client'
 import { request } from './client'
 
 export interface LibraryInfo {
@@ -8,19 +9,11 @@ export interface LibraryInfo {
   created_at: string
 }
 
-export interface KnowledgePoint {
+export interface Chapter {
   id: string
   code: string
   name: string
-  parent_id: string | null
   sort_order: number
-}
-
-interface Page<T> {
-  items: T[]
-  page: number
-  page_size: number
-  total: number
 }
 
 async function allItems<T>(path: string, signal: AbortSignal): Promise<T[]> {
@@ -36,8 +29,8 @@ export function getLibraries(signal: AbortSignal): Promise<LibraryInfo[]> {
   return allItems('/knowledge-bases', signal)
 }
 
-export function getPoints(signal: AbortSignal): Promise<KnowledgePoint[]> {
-  return allItems('/knowledge-points', signal)
+export function getChapters(signal: AbortSignal): Promise<Chapter[]> {
+  return allItems('/chapters', signal)
 }
 
 export function getLibrary(id: string, signal: AbortSignal): Promise<LibraryInfo> {

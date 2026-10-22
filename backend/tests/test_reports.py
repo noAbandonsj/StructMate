@@ -11,10 +11,10 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from test_documents import ORIGIN, register
-from test_practice import answer_for, create, items, submit
+from test_practice import answer_for, create, items, submit, submit_group
 
 from capstone.core.settings import Settings
-from capstone.db.models import Attempt, LearningReport, Question
+from capstone.db.models import Attempt, Chapter, LearningReport, Question
 from capstone.main import create_app
 from capstone.services.learning_stats import date_range
 
@@ -33,7 +33,7 @@ def wait_report(client, identifier, status="completed"):
         time.sleep(0.02)
 
 
-def test_empty_stats_unconfigured_report_export_and_permissions(bank_database, tmp_path):
+def test_empty_stats_unconfigured_report_export_and_permissions(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         other = TestClient(client.app)
@@ -45,7 +45,7 @@ def test_empty_stats_unconfigured_report_export_and_permissions(bank_database, t
             assert (
                 date.fromisoformat(stats["to_date"]) - date.fromisoformat(stats["from_date"])
             ).days == 6
-            assert all(point["evidence"] == "insufficient" for point in stats["knowledge_points"])
+            assert all(point["evidence"] == "insufficient" for point in stats["chapters"])
             created = report(client, headers)
             assert created.status_code == 202
             value = created.json()
@@ -78,21 +78,19 @@ def test_empty_stats_unconfigured_report_export_and_permissions(bank_database, t
             other.close()
 
 
-def test_statistics_shanghai_boundaries_categories_and_validity(bank_database, tmp_path):
+def test_statistics_shanghai_boundaries_categories_and_validity(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
         practice = create(client, headers)
-        questions = items(client, practice["id"])
-        for index, item in enumerate(questions):
-            assert (
-                submit(
-                    client, headers, item, answer_for(bank_database, item, index != 1), str(index)
-                ).status_code
-                == 201
-            )
+        assert (
+            submit_group(
+                client, headers, practice_db, practice, lambda index: index != 1
+            ).status_code
+            == 201
+        )
         start = datetime(2020, 1, 1, 16, tzinfo=UTC)  # Shanghai Jan 2 midnight
-        with Session(bank_database) as session, session.begin():
+        with Session(practice_db) as session, session.begin():
             rows = session.scalars(select(Attempt).order_by(Attempt.created_at)).all()
             for row, offset, category in zip(
                 rows,
@@ -112,10 +110,8 @@ def test_statistics_shanghai_boundaries_categories_and_validity(bank_database, t
         assert data["categories"]["review"]["count"] == 1
         assert data["categories"]["repeat"]["accuracy"] is None
         assert data["hinted_attempt_count"] == 1 and data["learning"]["active_days"] == 1
-        assert data["sources"]["bank"]["count"] == 3
-        assert data["sources"]["ai"]["accuracy"] is None
         assert "duration" not in json.dumps(data)
-        with Session(bank_database) as session, session.begin():
+        with Session(practice_db) as session, session.begin():
             session.execute(
                 update(Question).where(Question.id == invalid_question_id).values(is_valid=False)
             )
@@ -127,7 +123,7 @@ def test_statistics_shanghai_boundaries_categories_and_validity(bank_database, t
         assert end - begin == timedelta(days=7)
 
 
-def test_report_frozen_before_generation_and_history_does_not_change(bank_database, tmp_path):
+def test_report_frozen_before_generation_and_history_does_not_change(practice_db, tmp_path):
     class DelayedModel:
         available = True
 
@@ -145,14 +141,20 @@ def test_report_frozen_before_generation_and_history_does_not_change(bank_databa
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings, generation_service=model)) as client:
         _, headers = register(client)
-        practice = create(client, headers)
+        practice = create(client, headers, count=1)
         questions = items(client, practice["id"])
-        submit(client, headers, questions[0], answer_for(bank_database, questions[0]))
+        submit(client, headers, questions[0], answer_for(practice_db, questions[0]))
         first = report(client, headers).json()
         try:
             assert model.started.wait(3)
             assert first["snapshot"]["attempts"]["count"] == 1
-            submit(client, headers, questions[1], answer_for(bank_database, questions[1]), "second")
+            with Session(practice_db) as session:
+                other_chapter = session.scalar(
+                    select(Chapter.id).where(Chapter.code == "stack-queue")
+                )
+            second = create(client, headers, "next", count=1, chapter_ids=[str(other_chapter)])
+            question = items(client, second["id"])[0]
+            submit(client, headers, question, answer_for(practice_db, question), "second")
             assert report(client, headers).json()["id"] == first["id"]
             assert client.get("/api/v1/learning/stats").json()["attempts"]["count"] == 2
         finally:
@@ -162,7 +164,7 @@ def test_report_frozen_before_generation_and_history_does_not_change(bank_databa
         assert json.loads(model.prompts[0][1]["content"])["attempts"]["count"] == 1
         assert finished["snapshot"] == first["snapshot"]
         assert finished["generated_at"] and finished["content"]
-        with Session(bank_database) as session, session.begin():
+        with Session(practice_db) as session, session.begin():
             session.execute(
                 update(Question)
                 .where(Question.id == UUID(questions[0]["question_id"]))
@@ -171,7 +173,11 @@ def test_report_frozen_before_generation_and_history_does_not_change(bank_databa
         assert client.get("/api/v1/learning/stats").json()["attempts"]["count"] == 1
         assert client.get(f"/api/v1/reports/{first['id']}").json() == finished
         for changes in ({"snapshot": {}}, {"content": "rewritten"}):
-            with Session(bank_database) as session, pytest.raises(IntegrityError), session.begin():
+            with (
+                Session(practice_db) as session,
+                pytest.raises(IntegrityError),
+                session.begin(),
+            ):
                 session.execute(
                     update(LearningReport)
                     .where(LearningReport.id == UUID(first["id"]))
@@ -179,7 +185,7 @@ def test_report_frozen_before_generation_and_history_does_not_change(bank_databa
                 )
         assert (
             client.get("/api/v1/learning/overview").json()["recent_practices"][0]["id"]
-            == practice["id"]
+            == second["id"]
         )
         second = report(client, headers, "report-new").json()
         assert second["id"] != first["id"]
@@ -188,7 +194,7 @@ def test_report_frozen_before_generation_and_history_does_not_change(bank_databa
 
 
 def test_failed_and_interrupted_reports_keep_snapshot_and_migration_preserves_data(
-    bank_database, migration_config, tmp_path
+    practice_db, migration_config, tmp_path
 ):
     class FailedModel:
         available = True
@@ -200,19 +206,22 @@ def test_failed_and_interrupted_reports_keep_snapshot_and_migration_preserves_da
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings, generation_service=FailedModel())) as client:
         _, headers = register(client)
-        practice = create(client, headers)
+        create(client, headers)
         value = report(client, headers).json()
         failed = wait_report(client, value["id"], "failed")
         assert failed["snapshot"] == value["snapshot"]
         assert "private-model-secret" not in json.dumps(failed)
         assert failed["error_code"] == "REPORT_FAILED"
-        with Session(bank_database) as session, session.begin():
+        with Session(practice_db) as session, session.begin():
             session.execute(update(LearningReport).values(status="generating"))
         runner = client.app.state.report_runner
         runner.start()
         assert wait_report(client, value["id"], "failed")["error_code"] == "REPORT_INTERRUPTED"
         assert report(client, headers).json()["id"] == value["id"]
         command.downgrade(migration_config, "0005")
-        assert client.get(f"/api/v1/practice-sessions/{practice['id']}").status_code == 200
+        with practice_db.connect() as connection:
+            assert (
+                connection.exec_driver_sql("SELECT count(*) FROM practice_sessions").scalar() == 0
+            )
         command.upgrade(migration_config, "head")
         assert client.get("/api/v1/reports").json()["total"] == 0

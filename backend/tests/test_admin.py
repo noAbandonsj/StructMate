@@ -17,7 +17,7 @@ from test_conversations import TestGeneration, new_conversation, send, wait_answ
 from test_documents import ORIGIN, TEXT, TestEmbedding, register, upload, wait_document
 
 from capstone.core.settings import REPOSITORY_ROOT, Settings
-from capstone.db.models import CourseMaintenance, Document, DocumentTask, KnowledgePoint, User
+from capstone.db.models import Chapter, CourseMaintenance, Document, DocumentTask, User
 from capstone.db.session import write_transaction
 from capstone.import_course import import_course_data
 from capstone.main import create_app
@@ -42,7 +42,7 @@ def course_upload(client, headers, point, **values):
         headers=headers,
         files={"file": ("课程维护测试.md", TEXT, "text/markdown")},
         data={
-            "knowledge_point_id": str(point),
+            "chapter_id": str(point),
             "author": "维护者",
             "source": "自编",
             "license": "授权课程学习使用",
@@ -54,8 +54,8 @@ def course_upload(client, headers, point, **values):
 def point_id(engine):
     with Session(engine) as session:
         return session.scalar(
-            select(KnowledgePoint.id).where(KnowledgePoint.code == "stack-queue")
-        ) or session.scalar(select(KnowledgePoint.id))
+            select(Chapter.id).where(Chapter.code == "stack-queue")
+        ) or session.scalar(select(Chapter.id))
 
 
 def test_admin_api_rejects_student_and_immediate_revocation(migrated_database, tmp_path):
@@ -131,7 +131,7 @@ def test_course_upload_retrieval_processing_history_and_deletion(migrated_databa
             assert response.status_code == 202, response.text
             identifier = response.json()["document"]["id"]
             ready = wait_document(student, identifier, "ready")
-            assert ready["knowledge_point_id"] == str(point)
+            assert ready["chapter_id"] == str(point)
             assert ready["source_info"]["sources"][0]["author"] == "维护者"
             duplicate = course_upload(admin, headers, point, author="不覆盖")
             assert duplicate.json()["duplicate"] is True

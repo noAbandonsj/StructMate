@@ -1,3 +1,5 @@
+export interface Page<T> { items: T[]; total: number; page: number; page_size: number }
+
 import { markServiceUnavailable } from '../state/connection'
 
 export class ApiError extends Error {

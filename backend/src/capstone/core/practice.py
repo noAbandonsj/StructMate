@@ -40,7 +40,7 @@ class QuestionData(BaseModel):
 
 
 class AIQuestion(QuestionData):
-    knowledge_point_id: UUID | None = None
+    chapter_id: UUID | None = None
     difficulty: Difficulty
     citation_numbers: list[int] = Field(default_factory=list, max_length=6)
 
@@ -51,38 +51,21 @@ class RequestKey(BaseModel):
 
 
 class PracticeInput(RequestKey):
-    mode: Literal["chapter", "adaptive"] = "chapter"
-    question_source: Literal["bank", "ai"] = "bank"
-    knowledge_point_ids: list[UUID] = Field(default_factory=list, max_length=31)
+    chapter_id: UUID
     count: int = Field(default=5, ge=1, le=20)
     difficulty: Difficulty = "basic"
     generation_requirements: str = Field(default="", max_length=1000)
-    topic: str = Field(default="", max_length=500)
     document_ids: list[UUID] = Field(default_factory=list, max_length=5)
     source_conversation_id: UUID | None = None
 
-    @field_validator("topic", "generation_requirements")
+    @field_validator("generation_requirements")
     @classmethod
     def trim_text(cls, value):
         return value.strip()
 
-    @model_validator(mode="after")
-    def bank_has_no_ai_requirements(self):
-        if self.question_source == "bank" and self.generation_requirements:
-            raise ValueError("题库模式不接受 AI 出题要求")
-        if self.question_source == "ai" and not (
-            self.topic or self.document_ids or self.knowledge_point_ids
-        ):
-            raise ValueError("请填写练习主题或选择参考资料")
-        return self
-
 
 class ReviewInput(RequestKey):
     wrong_question_ids: list[UUID] = Field(min_length=1, max_length=20)
-
-
-class SubmitInput(RequestKey):
-    answer: str = Field(min_length=1, max_length=16)
 
 
 class ItemAnswer(BaseModel):
@@ -99,15 +82,3 @@ class SubmitPracticeInput(RequestKey):
         if len({item.practice_item_id for item in self.answers}) != len(self.answers):
             raise ValueError("每道题只能提交一个答案")
         return self
-
-
-class FeedbackInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    reason: str = Field(min_length=5, max_length=1000)
-
-    @field_validator("reason")
-    @classmethod
-    def reason_not_empty(cls, value):
-        if len(value.strip()) < 5:
-            raise ValueError("请具体说明题目问题")
-        return value.strip()

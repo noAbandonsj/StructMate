@@ -91,7 +91,7 @@ def test_no_hit_is_separate_from_answers_summary_and_followup_context(
         stream = client.get(queued.json()["stream_url"])
         assert "event: completed" in stream.text and "insufficient_materials" in stream.text
         stats = client.get("/api/v1/learning/stats").json()
-        assert stats["schema_version"] == 2
+        assert stats["schema_version"] == 4
         assert stats["learning"]["completed_answers"] == 0
         assert stats["learning"]["insufficient_materials"] == 1
         summary_path = f"/api/v1/conversations/{identifier}/summary"

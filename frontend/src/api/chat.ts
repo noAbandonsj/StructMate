@@ -1,15 +1,16 @@
+import type { Page } from './client'
 import { request } from './client'
 
 export type Scope = 'combined' | 'course' | 'personal'
 export type Intent = 'explain' | 'hint' | 'example'
 export interface Conversation {
   id: string; title: string; scope: Scope; document_ids: string[]
-  knowledge_point_id: string | null; archived: boolean; created_at: string; updated_at: string
+  chapter_id: string | null; archived: boolean; created_at: string; updated_at: string
 }
 export interface Citation {
   number: number; document_id: string; chunk_id: string; filename: string
   page_number: number | null; heading: string | null; line_start: number | null
-  line_end: number | null; text: string; source_deleted: boolean; knowledge_point_id: string | null
+  line_end: number | null; text: string; source_deleted: boolean; chapter_id: string | null
 }
 export interface Message {
   id: string; conversation_id: string; sequence: number; role: 'user' | 'assistant'
@@ -18,7 +19,6 @@ export interface Message {
   error_code: string | null; error_message: string | null
   answer_outcome: 'answered' | 'insufficient_materials' | null
 }
-export interface Page<T> { items: T[]; total: number; page: number; page_size: number }
 export interface Config {
   generation_available: boolean; embedding_available: boolean
   course_ready_count: number; personal_ready_count: number; ready_document_count: number

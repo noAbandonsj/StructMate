@@ -57,13 +57,13 @@ test('late responses from a previous account cannot overwrite the new account', 
     auth.authState.account = account('second')
     await vue.nextTick()
     for (const item of pending.filter(item => item.user === 'second')) {
-      item.resolve(response(page(item.url.includes('knowledge-points') ? [] : [library('second')])))
+      item.resolve(response(page(item.url.includes('chapters') ? [] : [library('second')])))
     }
     await until(() => pending.some(item => item.url.endsWith('/second')))
     pending.find(item => item.url.endsWith('/second')).resolve(response(library('second')))
     await until(() => view.state.detail?.id === 'second')
     for (const item of pending.filter(item => item.user === 'first')) {
-      item.resolve(response(page(item.url.includes('knowledge-points') ? [] : [library('first')])))
+      item.resolve(response(page(item.url.includes('chapters') ? [] : [library('first')])))
     }
     await new Promise(resolve => setImmediate(resolve))
     assert.deepEqual(view.state.libraries.map(item => item.id), ['second'])
@@ -78,7 +78,7 @@ test('changing selection discards a late detail response', async () => {
   let deferDetails = false
   globalThis.fetch = async (url) => {
     if (url.includes('knowledge-bases?')) return response(page([library('mine'), library('course', 'course')]))
-    if (url.includes('knowledge-points?')) return response(page([]))
+    if (url.includes('chapters?')) return response(page([]))
     if (!deferDetails) return response(library('mine'))
     return new Promise(resolve => pending.push({ url, resolve }))
   }
@@ -106,7 +106,7 @@ test('an expired session clears account and private library state', async () => 
     await until(() => auth.authState.account === null)
     await vue.nextTick()
     assert.equal(view.state.libraries.length, 0)
-    assert.equal(view.state.points.length, 0)
+    assert.equal(view.state.chapters.length, 0)
     assert.equal(view.state.detail, null)
   } finally {
     view.scope.stop()
@@ -120,10 +120,10 @@ test('a library connection failure still permits the course catalog to load', as
   }
   const view = createScope('student')
   try {
-    await until(() => view.state.pointsStatus === 'ready')
+    await until(() => view.state.chaptersStatus === 'ready')
     assert.equal(view.state.librariesStatus, 'error')
     assert.match(view.state.librariesError, /连接/)
-    assert.equal(view.state.points[0].name, '线性表')
+    assert.equal(view.state.chapters[0].name, '线性表')
   } finally {
     view.scope.stop()
   }
@@ -133,7 +133,7 @@ test('disposing the page clears private values and ignores a late detail respons
   let resolveDetail
   globalThis.fetch = async (url) => {
     if (url.includes('knowledge-bases?')) return response(page([library('mine')]))
-    if (url.includes('knowledge-points?')) return response(page([]))
+    if (url.includes('chapters?')) return response(page([]))
     return new Promise(resolve => { resolveDetail = resolve })
   }
   const view = createScope('mine')

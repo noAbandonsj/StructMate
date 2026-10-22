@@ -6,8 +6,7 @@ from sqlalchemy import func, select
 from starlette.responses import PlainTextResponse
 
 from capstone.api.conversations import RequestKey
-from capstone.api.knowledge import PageNumber, PageSize
-from capstone.api.schemas import Page
+from capstone.api.schemas import Page, PageNumber, PageSize
 from capstone.core.auth import (
     AuthenticatedSession,
     DatabaseSession,

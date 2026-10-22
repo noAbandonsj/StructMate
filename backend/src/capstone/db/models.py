@@ -94,27 +94,18 @@ class KnowledgeBase(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
-class KnowledgePoint(Base):
-    __tablename__ = "knowledge_points"
+class Chapter(Base):
+    __tablename__ = "chapters"
     __table_args__ = (
-        UniqueConstraint("code", name="uq_knowledge_points_code"),
-        CheckConstraint("length(code) BETWEEN 1 AND 64", name="ck_knowledge_points_code"),
-        CheckConstraint("length(name) BETWEEN 1 AND 100", name="ck_knowledge_points_name"),
-        CheckConstraint("sort_order >= 0", name="ck_knowledge_points_sort_order"),
-        CheckConstraint("parent_id IS NULL OR parent_id != id", name="ck_knowledge_points_parent"),
+        UniqueConstraint("code", name="uq_chapters_code"),
+        CheckConstraint("length(code) BETWEEN 1 AND 64", name="ck_chapters_code"),
+        CheckConstraint("length(name) BETWEEN 1 AND 100", name="ck_chapters_name"),
+        CheckConstraint("sort_order >= 0", name="ck_chapters_sort_order"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     code: Mapped[str] = mapped_column(String(64))
     name: Mapped[str] = mapped_column(String(100))
-    parent_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey(
-            "knowledge_points.id",
-            name="fk_knowledge_points_parent_id_knowledge_points",
-            ondelete="RESTRICT",
-        ),
-        index=True,
-    )
     sort_order: Mapped[int] = mapped_column(default=0)
 
 
@@ -145,9 +136,7 @@ class Document(Base):
     knowledge_base_id: Mapped[UUID] = mapped_column(
         ForeignKey("knowledge_bases.id", ondelete="RESTRICT"), index=True
     )
-    knowledge_point_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("knowledge_points.id", ondelete="RESTRICT")
-    )
+    chapter_id: Mapped[UUID | None] = mapped_column(ForeignKey("chapters.id", ondelete="RESTRICT"))
     filename: Mapped[str] = mapped_column(String(240))
     file_type: Mapped[str] = mapped_column(String(8))
     storage_key: Mapped[str] = mapped_column(String(48))
@@ -211,9 +200,7 @@ class DocumentChunk(Base):
     heading: Mapped[str | None] = mapped_column(Text)
     line_start: Mapped[int | None] = mapped_column()
     line_end: Mapped[int | None] = mapped_column()
-    knowledge_point_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("knowledge_points.id", ondelete="RESTRICT")
-    )
+    chapter_id: Mapped[UUID | None] = mapped_column(ForeignKey("chapters.id", ondelete="RESTRICT"))
 
 
 class DocumentTask(Base):
@@ -255,9 +242,7 @@ class Conversation(Base):
     title: Mapped[str] = mapped_column(String(100), default="新的学习")
     scope: Mapped[str] = mapped_column(String(16), default="combined")
     document_ids: Mapped[list] = mapped_column(JSON, default=list)
-    knowledge_point_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("knowledge_points.id", ondelete="RESTRICT")
-    )
+    chapter_id: Mapped[UUID | None] = mapped_column(ForeignKey("chapters.id", ondelete="RESTRICT"))
     archived: Mapped[bool] = mapped_column(default=False)
     summary_data: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
@@ -310,32 +295,20 @@ class Question(Base):
     __tablename__ = "questions"
     __table_args__ = (
         CheckConstraint(
-            "(source_type = 'bank' AND owner_id IS NULL AND bank_key IS NOT NULL) OR "
-            "(source_type = 'ai' AND owner_id IS NOT NULL AND bank_key IS NULL)",
-            name="ck_questions_source_owner",
-        ),
-        CheckConstraint(
             "difficulty IN ('basic', 'intermediate', 'advanced')", name="ck_questions_difficulty"
         ),
-        UniqueConstraint("bank_key", name="uq_questions_bank_key"),
         UniqueConstraint("owner_id", "content_fingerprint", name="uq_questions_owner_content"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    owner_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    chapter_id: Mapped[UUID] = mapped_column(
+        ForeignKey("chapters.id", ondelete="RESTRICT"), index=True
     )
-    knowledge_point_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("knowledge_points.id", ondelete="RESTRICT"), index=True
-    )
-    source_type: Mapped[str] = mapped_column(String(8))
-    bank_code: Mapped[str | None] = mapped_column(String(64))
-    bank_key: Mapped[str | None] = mapped_column(String(160))
-    content_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    content_fingerprint: Mapped[str] = mapped_column(String(64))
     difficulty: Mapped[str] = mapped_column(String(16))
     content: Mapped[dict] = mapped_column(JSON)
     source_info: Mapped[dict] = mapped_column(JSON)
     is_valid: Mapped[bool] = mapped_column(default=True)
-    available: Mapped[bool] = mapped_column(default=True)
     disabled_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
@@ -344,15 +317,7 @@ class PracticeSession(Base):
     __tablename__ = "practice_sessions"
     __table_args__ = (
         UniqueConstraint("user_id", "request_id", name="uq_practice_sessions_request"),
-        CheckConstraint(
-            "mode IN ('chapter', 'adaptive', 'review')", name="ck_practice_sessions_mode"
-        ),
-        CheckConstraint(
-            "(mode = 'review' AND question_source IS NULL) OR "
-            "(mode != 'review' AND question_source IN ('bank', 'ai') "
-            "AND question_source IS NOT NULL)",
-            name="ck_practice_sessions_source",
-        ),
+        CheckConstraint("mode IN ('chapter', 'review')", name="ck_practice_sessions_mode"),
         CheckConstraint(
             "status IN ('generating', 'ready', 'completed', 'failed')",
             name="ck_practice_sessions_status",
@@ -361,7 +326,6 @@ class PracticeSession(Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     mode: Mapped[str] = mapped_column(String(16))
-    question_source: Mapped[str | None] = mapped_column(String(8))
     settings: Mapped[dict] = mapped_column(JSON)
     source_conversation_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("conversations.id", ondelete="RESTRICT")
@@ -394,7 +358,6 @@ class PracticeItem(Base):
     position: Mapped[int] = mapped_column()
     snapshot: Mapped[dict] = mapped_column(JSON)
     hinted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
-    feedback: Mapped[dict | None] = mapped_column(JSON)
 
 
 class Attempt(Base):
@@ -480,8 +443,8 @@ class Resource(Base):
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     code: Mapped[str] = mapped_column(String(80), unique=True)
-    knowledge_point_id: Mapped[UUID] = mapped_column(
-        ForeignKey("knowledge_points.id", ondelete="RESTRICT"), index=True
+    chapter_id: Mapped[UUID] = mapped_column(
+        ForeignKey("chapters.id", ondelete="RESTRICT"), index=True
     )
     title: Mapped[str] = mapped_column(String(240))
     description: Mapped[str] = mapped_column(Text)

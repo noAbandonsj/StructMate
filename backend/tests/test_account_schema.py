@@ -8,7 +8,7 @@ from sqlalchemy import Engine, inspect, select
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.orm import Session
 
-from capstone.db.models import AuthSession, KnowledgeBase, KnowledgePoint, User
+from capstone.db.models import AuthSession, KnowledgeBase, User
 from capstone.seed import seed_course_data
 
 
@@ -27,7 +27,7 @@ def test_migration_matches_models_and_populated_database_can_be_downgraded(
         "users",
         "auth_sessions",
         "knowledge_bases",
-        "knowledge_points",
+        "chapters",
         "documents",
         "document_chunks",
         "document_tasks",
@@ -130,7 +130,7 @@ def test_course_code_is_unique_without_limiting_distinct_courses(migrated_databa
         session.add(KnowledgeBase(kind="course", course_code="data-structures", name="重复课程"))
 
 
-@pytest.mark.parametrize("entity", ["session", "library", "knowledge-point"])
+@pytest.mark.parametrize("entity", ["session", "library"])
 def test_foreign_keys_reject_missing_parents(migrated_database: Engine, entity: str) -> None:
     with pytest.raises(IntegrityError), Session(migrated_database) as session, session.begin():
         missing_id = uuid4()
@@ -143,8 +143,6 @@ def test_foreign_keys_reject_missing_parents(migrated_database: Engine, entity: 
             )
         elif entity == "library":
             record = KnowledgeBase(kind="personal", owner_id=missing_id, name="我的资料")
-        else:
-            record = KnowledgePoint(code="child", name="子知识点", parent_id=missing_id)
         session.add(record)
 
 

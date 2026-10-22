@@ -22,7 +22,7 @@ from capstone.core.errors import ApiError
 from capstone.core.model_config import ModelConnection
 from capstone.core.model_http import DeepSeekGeneration
 from capstone.core.settings import Settings
-from capstone.db.models import KnowledgePoint
+from capstone.db.models import Chapter
 from capstone.main import create_app
 
 
@@ -67,7 +67,7 @@ def local_provider():
                             "answer": "true",
                             "explanation": "后进先出。",
                             "hint": "考虑操作端。",
-                            "knowledge_point_id": state["point"],
+                            "chapter_id": state["point"],
                             "difficulty": "basic",
                             "citation_numbers": [1],
                         }
@@ -110,15 +110,11 @@ def local_provider():
 
 
 def test_production_http_adapters_drive_documents_chat_ai_summary_report(
-    bank_database, tmp_path, local_provider
+    practice_db, tmp_path, local_provider
 ):
     origin, state = local_provider
-    with Session(bank_database) as session:
-        point = str(
-            session.scalar(
-                select(KnowledgePoint.id).where(KnowledgePoint.code == "stack-queue.stack")
-            )
-        )
+    with Session(practice_db) as session:
+        point = str(session.scalar(select(Chapter.id).where(Chapter.code == "stack-queue")))
     state["point"] = point
     settings = Settings(
         _env_file=None,
@@ -137,7 +133,7 @@ def test_production_http_adapters_drive_documents_chat_ai_summary_report(
         library, headers = register(client)
         document = upload(client, library, headers)["document"]["id"]
         wait_document(client, document, "ready")
-        conversation = new_conversation(client, headers, scope="personal", knowledge_point_id=point)
+        conversation = new_conversation(client, headers, scope="personal", chapter_id=point)
         assert send(client, headers, conversation).status_code == 202
         answer = wait_answer(client, conversation)
         assert answer["citations"][0]["document_id"] == document
@@ -147,8 +143,9 @@ def test_production_http_adapters_drive_documents_chat_ai_summary_report(
             headers,
             question_source="ai",
             count=1,
-            knowledge_point_ids=[point],
+            chapter_ids=[point],
             source_conversation_id=conversation,
+            document_ids=[document],
         )
         wait_practice(client, practice["id"])
         question = items(client, practice["id"])[0]
@@ -160,7 +157,7 @@ def test_production_http_adapters_drive_documents_chat_ai_summary_report(
         saved = report(client, headers).json()
         finished = wait_report(client, saved["id"])
         assert finished["snapshot"]["attempts"]["count"] == 1 and finished["content"]
-        assert state["generation"] == 5 and state["embedding"] >= 3
+        assert state["generation"] == 5 and state["embedding"] >= 2
 
 
 def test_cancellation_interrupts_a_stalled_http_stream(local_provider):

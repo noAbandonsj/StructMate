@@ -22,10 +22,10 @@ watch(selected, () => { citationVersion++; citation.value = null; citationError.
 watch(() => state.conversation?.title, value => { title.value = value ?? '' })
 const available = computed(() => state.config?.generation_available && state.config.embedding_available)
 const noReadyMaterials = computed(() => state.config?.ready_document_count === 0)
-const practiceTopic = computed(() => ([...state.messages].reverse().find(message => message.role === 'user')?.content || state.conversation?.title || '').slice(0, 500))
+const practiceRequirements = computed(() => ([...state.messages].reverse().find(message => message.role === 'user')?.content || state.conversation?.title || '').slice(0, 500))
 async function start() {
   const documents = typeof route.query.document === 'string' ? [route.query.document] : []
-  const point = typeof route.query.point === 'string' ? route.query.point : undefined
+  const point = typeof route.query.chapter === 'string' ? route.query.chapter : undefined
   const conversation = await create(newScope.value, documents, point)
   if (conversation) await router.push('/chat/' + conversation.id)
 }
@@ -83,7 +83,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
             <button type="button" class="text-button" :disabled="state.loading" @click="reload()">重新检查资料</button>
           </div>
           <div class="message-history" aria-label="会话记录">
-            <RouterLink :to="{ path: '/practice', query: { conversation: selected, topic: practiceTopic || undefined } }">围绕本次对话练习</RouterLink>
+            <RouterLink :to="{ path: '/practice', query: { conversation: selected, chapter: state.conversation?.chapter_id || undefined, requirements: practiceRequirements || undefined } }">围绕本次对话练习</RouterLink>
             <button v-if="state.historyPage > 1" @click="older()" :disabled="state.loading">查看更早消息</button>
             <p v-if="!state.messages.length" class="field-help">可以问：“栈和队列有什么区别？”或“用例子解释二叉树遍历”。</p>
             <article v-for="(message, index) in state.messages" :key="message.id" class="chat-message" :class="message.role">
@@ -95,7 +95,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
               <p v-if="message.status === 'cancelled'" class="field-help">回答已取消，已生成内容保留。</p>
               <p v-if="message.answer_outcome === 'insufficient_materials'" class="field-help">资料不足 · 未计入有效答疑，也不参与新的学习总结。可调整资料范围或补充资料后重新提问。</p>
               <div v-if="message.citations.length" class="citation-links"><span>检索依据：</span><button v-for="value in message.citations" :key="value.number" class="text-button" @click="showCitation(value)">[{{ value.number }}] {{ value.filename }}{{ value.source_deleted ? '（来源已删除）' : '' }}</button></div>
-              <RouterLink v-if="message.citations.length" :to="{ path: '/practice', query: { conversation: selected, document: message.citations[0]?.document_id, topic: practiceTopic || undefined } }">依据引用资料练习</RouterLink>
+              <RouterLink v-if="message.citations.length" :to="{ path: '/practice', query: { conversation: selected, document: message.citations[0]?.document_id, chapter: message.citations[0]?.chapter_id || state.conversation?.chapter_id || undefined, requirements: practiceRequirements || undefined } }">依据引用资料练习</RouterLink>
               <button v-if="index === state.messages.length - 1 && ['failed','cancelled'].includes(message.status)" :disabled="state.busy || !!active || !available" @click="retry(message.id)">重试这个问题</button>
             </article>
           </div>

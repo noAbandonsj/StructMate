@@ -18,8 +18,7 @@ from capstone.api.documents import (
     document_file,
     info,
 )
-from capstone.api.knowledge import PageNumber, PageSize
-from capstone.api.schemas import Page
+from capstone.api.schemas import Page, PageNumber, PageSize
 from capstone.core.auth import (
     Administrator,
     DatabaseSession,
@@ -60,9 +59,12 @@ def list_course_documents(
     page: PageNumber = 1,
     page_size: PageSize = 20,
     search: str = Query(default="", max_length=240),
+    chapter_id: UUID | None = None,
     status: Literal["processing", "ready", "failed", "deleted"] | None = None,
 ) -> Page[DocumentInfo]:
     predicate = Document.knowledge_base_id == course_library(session)
+    if chapter_id:
+        predicate &= Document.chapter_id == chapter_id
     predicate &= (
         (Document.status == status)
         if status
@@ -91,7 +93,7 @@ class Attribution(BaseModel):
     author: str = Field(min_length=1, max_length=200)
     source: str = Field(min_length=1, max_length=1000)
     license: str = Field(min_length=1, max_length=1000)
-    knowledge_point_id: UUID
+    chapter_id: UUID
 
 
 @router.post(
@@ -107,7 +109,7 @@ async def upload_course_document(
     library_id = course_library(session)
     session.rollback()
     async with request.form(max_files=1, max_fields=4) as form:
-        if set(form.keys()) - {"file", "knowledge_point_id", "author", "source", "license"} or any(
+        if set(form.keys()) - {"file", "chapter_id", "author", "source", "license"} or any(
             len(form.getlist(key)) != 1 for key in form
         ):
             raise ApiError(422, "UPLOAD_FIELDS_INVALID", "上传包含不支持或重复的字段。")
@@ -122,7 +124,7 @@ async def upload_course_document(
             raise ApiError(
                 422,
                 "ATTRIBUTION_REQUIRED",
-                "请选择知识点，并填写作者、来源和许可说明。自编资料可注明自编。",
+                "请选择章节，并填写作者、来源和许可说明。自编资料可注明自编。",
             ) from None
         maximum = request.app.state.settings.upload_max_mib * 1024 * 1024
         data = await file.read(maximum + 1)
@@ -133,7 +135,7 @@ async def upload_course_document(
             file.filename,
             data,
             maximum,
-            attribution.knowledge_point_id,
+            attribution.chapter_id,
             source_info={
                 "sources": [
                     {

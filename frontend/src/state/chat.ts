@@ -118,8 +118,8 @@ export function useChat(selected: Ref<string>) {
     } catch (error) { if (valid(version, account.user.id, id)) await failure(error) }
     finally { if (valid(version, account.user.id, id)) state.busy = false }
   }
-  async function create(scope: api.Scope, documentIds: string[] = [], pointId?: string) {
-    return mutate((csrf, signal) => api.create(csrf, { scope, document_ids: documentIds, knowledge_point_id: pointId || null }, signal))
+  async function create(scope: api.Scope, documentIds: string[] = [], chapterId?: string) {
+    return mutate((csrf, signal) => api.create(csrf, { scope, document_ids: documentIds, chapter_id: chapterId || null }, signal))
   }
   async function send() {
     const content = state.draft.trim(), version = epoch, user = authState.account?.user.id, id = selected.value

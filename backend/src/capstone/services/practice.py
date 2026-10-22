@@ -1,13 +1,11 @@
 import json
 from hashlib import sha256
-from secrets import SystemRandom
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from capstone.core.errors import ApiError
-from capstone.core.practice import SubmitInput
 from capstone.db.models import (
     Attempt,
     PracticeItem,
@@ -17,9 +15,9 @@ from capstone.db.models import (
     utc_now,
 )
 from capstone.db.session import write_transaction
+from capstone.services.chapters import require_chapter
 from capstone.services.conversations import get_conversation
 from capstone.services.documents import get_document
-from capstone.services.performance import performance, selected_points
 from capstone.services.practice_serialization import item_info, practice_info, snapshot
 
 
@@ -68,11 +66,6 @@ def distribute(session, practice, questions):
         )
     practice.actual_count = len(questions)
     practice.status = "ready" if questions else "failed"
-    if not questions:
-        practice.error_code, practice.error_message = (
-            "BANK_EMPTY",
-            "没有符合条件的题目，请调整知识点或难度。",
-        )
 
 
 def request_digest(data):
@@ -90,7 +83,7 @@ def existing_request(session, user_id, request_id, digest):
     return previous
 
 
-def reference_documents(session, user_id, identifiers):
+def reference_documents(session, user_id, identifiers, chapter_id=None):
     result = []
     for identifier in sorted(set(identifiers), key=str):
         document = get_document(session, identifier, user_id)
@@ -98,6 +91,8 @@ def reference_documents(session, user_id, identifiers):
             raise ApiError(
                 409, "PRACTICE_DOCUMENT_NOT_READY", "所选参考资料已删除或尚未就绪，请重新选择。"
             )
+        if chapter_id and document.chapter_id not in {None, chapter_id}:
+            raise ApiError(422, "MATERIAL_CHAPTER_MISMATCH", "参考资料属于其他章节，请重新选择。")
         result.append(
             {
                 "id": str(document.id),
@@ -111,31 +106,20 @@ def reference_documents(session, user_id, identifiers):
 
 def create_practice(session, user_id, data, generation_available):
     settings = data.model_dump(mode="json", exclude={"client_request_id"})
-    settings["knowledge_point_ids"] = sorted(set(settings["knowledge_point_ids"]))
     settings["document_ids"] = sorted(set(settings["document_ids"]))
-    digest_settings = (
-        settings
-        if data.topic or data.document_ids
-        else {key: value for key, value in settings.items() if key not in {"topic", "document_ids"}}
-    )
-    digest = request_digest(digest_settings)
+    digest = request_digest(settings)
     with write_transaction(session):
         if previous := existing_request(session, user_id, data.client_request_id, digest):
             return previous, False
         if data.source_conversation_id:
             get_conversation(session, data.source_conversation_id, user_id)
-        references = reference_documents(session, user_id, data.document_ids)
-        settings["reference_documents"] = references
-        settings["topic_from_materials"] = not bool(settings["topic"]) and bool(references)
-        if not settings["topic"] and references:
-            settings["topic"] = "、".join(item["filename"] for item in references)[:500]
-        points = selected_points(session, data.knowledge_point_ids)
-        if not set(data.knowledge_point_ids).issubset({point.id for point in points}):
-            raise ApiError(422, "KNOWLEDGE_POINT_INVALID", "所选知识点不存在。")
+        chapter = require_chapter(session, data.chapter_id)
+        settings["reference_documents"] = reference_documents(
+            session, user_id, data.document_ids, chapter.id
+        )
         practice = PracticeSession(
             user_id=user_id,
-            mode=data.mode,
-            question_source=data.question_source,
+            mode="chapter",
             settings=settings,
             source_conversation_id=data.source_conversation_id,
             request_id=data.client_request_id,
@@ -143,41 +127,10 @@ def create_practice(session, user_id, data, generation_available):
         )
         session.add(practice)
         session.flush()
-        if data.question_source == "ai":
-            if not generation_available:
-                practice.status, practice.error_code = "failed", "GENERATION_NOT_CONFIGURED"
-                practice.error_message = "生成模型尚未接通。设置已保留，请联系管理员配置后重试。"
-            return practice, generation_available
-        questions = session.scalars(
-            select(Question).where(
-                Question.source_type == "bank",
-                Question.available.is_(True),
-                Question.is_valid.is_(True),
-                Question.difficulty == data.difficulty,
-                Question.knowledge_point_id.in_([point.id for point in points]),
-            )
-        ).all()
-        seen = set(session.scalars(select(Attempt.question_id).where(Attempt.user_id == user_id)))
-        codes = {point.id: point.code for point in points}
-        ranks = {
-            item["code"]: index for index, item in enumerate(performance(session, user_id)["items"])
-        }
-        random = SystemRandom()
-        questions.sort(
-            key=lambda question: (
-                ranks.get(codes[question.knowledge_point_id].split(".")[0], 99)
-                if data.mode == "adaptive"
-                else 0,
-                question.id in seen,
-                random.random(),
-            )
-        )
-        distribute(session, practice, questions[: data.count])
-        if practice.actual_count < data.count and practice.actual_count:
-            practice.notice = (
-                f"题库符合条件的题目不足 {data.count} 道，本组实际 {practice.actual_count} 道。"
-            )
-    return practice, False
+        if not generation_available:
+            practice.status, practice.error_code = "failed", "GENERATION_NOT_CONFIGURED"
+            practice.error_message = "生成模型尚未接通，设置已保留，请联系管理员配置后重试。"
+        return practice, generation_available
 
 
 def create_review(session, user_id, data):
@@ -192,13 +145,12 @@ def create_review(session, user_id, data):
             question = session.get(Question, wrong.question_id)
             if not question.is_valid:
                 raise ApiError(409, "QUESTION_INVALID", "包含已停用的错题，请刷新后重新选择。")
-            if question.owner_id is not None and question.owner_id != user_id:
+            if question.owner_id != user_id:
                 raise ApiError(404, "WRONG_QUESTION_NOT_FOUND", "错题不存在或不可访问。")
             questions.append(question)
         practice = PracticeSession(
             user_id=user_id,
             mode="review",
-            question_source=None,
             settings={"wrong_question_ids": identifiers, "count": len(questions)},
             request_id=data.client_request_id,
             request_hash=digest,
@@ -209,27 +161,10 @@ def create_review(session, user_id, data):
     return practice
 
 
-def submit(session, identifier, user_id, data):
-    with write_transaction(session):
-        return _submit(session, identifier, user_id, data)
-
-
-def _submit(session, identifier, user_id, data):
-    item = get_item(session, identifier, user_id)
-    previous = session.scalar(select(Attempt).where(Attempt.practice_item_id == item.id))
-    if previous:
-        if previous.answer != data.answer:
-            raise ApiError(409, "ALREADY_SUBMITTED", "这道题已提交，请查看原结果。")
-        return previous
-    question = session.get(Question, item.question_id)
-    if not question.is_valid:
-        raise ApiError(409, "QUESTION_INVALID", "此题已确认有误，不计分，请继续其他题目。")
-    if data.answer not in {option["key"] for option in item.snapshot["options"]}:
-        raise ApiError(422, "ANSWER_INVALID", "请选择题目提供的选项。")
-    practice = get_practice(session, item.practice_session_id, user_id)
+def _record_answer(session, item, practice, user_id, answer, request_id):
     seen = session.scalar(
         select(Attempt.id)
-        .where(Attempt.user_id == user_id, Attempt.question_id == question.id)
+        .where(Attempt.user_id == user_id, Attempt.question_id == item.question_id)
         .limit(1)
     )
     category = (
@@ -245,10 +180,10 @@ def _submit(session, identifier, user_id, data):
     attempt = Attempt(
         user_id=user_id,
         practice_item_id=item.id,
-        question_id=question.id,
-        request_id=data.client_request_id,
-        answer=data.answer,
-        is_correct=data.answer == item.snapshot["answer"],
+        question_id=item.question_id,
+        request_id=request_id,
+        answer=answer,
+        is_correct=answer == item.snapshot["answer"],
         hinted=item.hinted_at is not None,
         category=category,
         created_at=now,
@@ -256,12 +191,12 @@ def _submit(session, identifier, user_id, data):
     session.add(attempt)
     wrong = session.scalar(
         select(WrongQuestion).where(
-            WrongQuestion.user_id == user_id, WrongQuestion.question_id == question.id
+            WrongQuestion.user_id == user_id, WrongQuestion.question_id == item.question_id
         )
     )
     if not attempt.is_correct:
         if wrong is None:
-            wrong = WrongQuestion(user_id=user_id, question_id=question.id)
+            wrong = WrongQuestion(user_id=user_id, question_id=item.question_id)
             session.add(wrong)
         wrong.status, wrong.correct_days, wrong.last_correct_date = "pending", 0, None
     elif wrong is not None:
@@ -273,19 +208,6 @@ def _submit(session, identifier, user_id, data):
     if wrong:
         wrong.updated_at = now
     session.flush()
-    remaining = session.scalar(
-        select(func.count())
-        .select_from(PracticeItem)
-        .join(Question)
-        .outerjoin(Attempt, Attempt.practice_item_id == PracticeItem.id)
-        .where(
-            PracticeItem.practice_session_id == practice.id,
-            Question.is_valid.is_(True),
-            Attempt.id.is_(None),
-        )
-    )
-    if remaining == 0:
-        practice.status, practice.completed_at = "completed", now
     return attempt
 
 
@@ -303,21 +225,26 @@ def submit_practice(session, identifier, user_id, data):
         answers = {item.practice_item_id: item.answer for item in data.answers}
         if not items or set(answers) != {item.id for item in items}:
             raise ApiError(422, "PRACTICE_ANSWERS_INCOMPLETE", "请完成本组全部有效题目后统一提交。")
+        previous_attempts = {
+            attempt.practice_item_id: attempt
+            for attempt in session.scalars(
+                select(Attempt).where(Attempt.practice_item_id.in_([item.id for item in items]))
+            )
+        }
         # Validate every answer before writing any attempts or wrong-question state.
         for item in items:
             if answers[item.id] not in {option["key"] for option in item.snapshot["options"]}:
                 raise ApiError(422, "ANSWER_INVALID", "部分答案无效，请检查后重新提交。")
-            previous = session.scalar(select(Attempt).where(Attempt.practice_item_id == item.id))
+            previous = previous_attempts.get(item.id)
             if previous is not None and previous.answer != answers[item.id]:
                 raise ApiError(
                     409, "ALREADY_SUBMITTED", "本组包含已提交的答案，请刷新后查看原结果。"
                 )
         for item in items:
-            _submit(
-                session,
-                item.id,
-                user_id,
-                SubmitInput(client_request_id=data.client_request_id, answer=answers[item.id]),
+            if item.id in previous_attempts:
+                continue
+            _record_answer(
+                session, item, practice, user_id, answers[item.id], data.client_request_id
             )
         if practice.status != "completed":
             practice.status, practice.completed_at = "completed", utc_now()
@@ -345,15 +272,3 @@ def use_hint(session, identifier, user_id):
             item.hinted_at = utc_now()
         hint = item.snapshot["hint"]
     return {"hint": hint, "hinted": True}
-
-
-def feedback(session, identifier, user_id, reason):
-    with write_transaction(session):
-        item = get_item(session, identifier, user_id)
-        if not session.scalar(select(Attempt.id).where(Attempt.practice_item_id == item.id)):
-            raise ApiError(409, "SUBMISSION_REQUIRED", "请先提交作答，再反馈题目问题。")
-        if item.feedback and item.feedback["reason"] != reason:
-            raise ApiError(409, "FEEDBACK_EXISTS", "该题反馈已保存，等待维护者核对。")
-        if item.feedback is None:
-            item.feedback = {"reason": reason, "created_at": utc_now().isoformat()}
-    return item.feedback

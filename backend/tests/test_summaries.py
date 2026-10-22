@@ -188,7 +188,7 @@ def test_summary_failure_keeps_previous_content_and_restart_does_not_replay(
         assert result["content"] == first["content"] and fresh.prompts == []
 
 
-def test_long_summary_covers_tail_and_native_downgrade_preserves_messages(
+def test_long_summary_covers_tail_and_cleanup_resets_history(
     migrated_database, migration_config, tmp_path
 ):
     model = TestSummaryGeneration()
@@ -206,6 +206,6 @@ def test_long_summary_covers_tail_and_native_downgrade_preserves_messages(
         assert any("末尾知识点必须保留" in prompt[-1]["content"] for prompt in model.prompts)
     command.downgrade(migration_config, "0004")
     with Session(migrated_database) as session:
-        assert session.scalar(select(func.count()).select_from(Message)) == 2
+        assert session.scalar(select(func.count()).select_from(Message)) == 0
     command.upgrade(migration_config, "head")
     command.check(migration_config)

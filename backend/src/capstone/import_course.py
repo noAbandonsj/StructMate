@@ -11,9 +11,10 @@ from sqlalchemy.orm import Session
 
 from capstone.core.errors import ApiError
 from capstone.core.settings import Settings
-from capstone.db.models import Document, DocumentTask, KnowledgeBase, KnowledgePoint
+from capstone.db.models import Document, DocumentTask, KnowledgeBase
 from capstone.db.session import create_database_engine, write_transaction
 from capstone.seed import COURSE_CODE
+from capstone.services.chapters import chapters
 from capstone.services.documents import create_document
 from capstone.services.storage import BlobStore, validate_upload
 
@@ -56,14 +57,10 @@ def import_course_data(
         )
         if library_id is None:
             raise ApiError(409, "COURSE_NOT_INITIALIZED", "请先运行 capstone.seed 初始化课程目录。")
-        point_ids = dict(session.execute(select(KnowledgePoint.code, KnowledgePoint.id)).all())
+        point_ids = {chapter.code: chapter.id for chapter in chapters(session)}
         session.rollback()
-        if any(
-            not set(item["knowledge_point_codes"]).issubset(point_ids)
-            or item["knowledge_point_codes"][0].split(".", 1)[0] not in point_ids
-            for item, _data, _references in prepared
-        ):
-            raise ApiError(422, "COURSE_POINT_MISSING", "课程资料关联的知识点不存在。")
+        if any(item["chapter_code"] not in point_ids for item, _data, _references in prepared):
+            raise ApiError(422, "COURSE_POINT_MISSING", "课程资料须关联一个内置章节。")
         for item, data, references in prepared:
             # A tombstone is scoped by stable content code, not by its hash:
             # even an updated preset must not silently undo a maintainer's deletion.
@@ -85,9 +82,7 @@ def import_course_data(
             if tombstone is not None and live is None and not restore_deleted:
                 skipped += 1
                 continue
-            root_code = item["knowledge_point_codes"][0].split(".", 1)[0]
-            if root_code not in point_ids:
-                raise ApiError(422, "COURSE_POINT_MISSING", "课程资料关联的知识点不存在。")
+            chapter_code = item["chapter_code"]
             try:
                 document, created = create_document(
                     session,
@@ -96,7 +91,7 @@ def import_course_data(
                     item["title"] + ".md",
                     data,
                     settings.upload_max_mib * 1024 * 1024,
-                    point_ids[root_code],
+                    point_ids[chapter_code],
                     source_info={
                         "content_code": item["code"],
                         "title": item["title"],

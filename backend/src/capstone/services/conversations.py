@@ -9,11 +9,11 @@ from capstone.db.models import (
     Conversation,
     Document,
     KnowledgeBase,
-    KnowledgePoint,
     Message,
     utc_now,
 )
 from capstone.db.session import write_transaction
+from capstone.services.chapters import require_chapter
 from capstone.services.learning_readiness import ready_document_count
 from capstone.services.retrieval import document_predicate
 
@@ -39,8 +39,8 @@ def get_message(session, identifier, user_id):
 
 
 def validate_scope(session, user_id, scope, identifiers, point_id):
-    if point_id is not None and session.get(KnowledgePoint, point_id) is None:
-        raise ApiError(422, "KNOWLEDGE_POINT_INVALID", "知识点不存在。")
+    if point_id is not None:
+        require_chapter(session, point_id)
     if identifiers:
         found = set(
             session.scalars(
@@ -55,7 +55,7 @@ def validate_scope(session, user_id, scope, identifiers, point_id):
 
 def create_conversation(session, user_id, data):
     with write_transaction(session):
-        validate_scope(session, user_id, data.scope, data.document_ids, data.knowledge_point_id)
+        validate_scope(session, user_id, data.scope, data.document_ids, data.chapter_id)
         record = Conversation(user_id=user_id, **data.model_dump())
         session.add(record)
     return record
@@ -65,7 +65,7 @@ def update_conversation(session, identifier, user_id, data):
     with write_transaction(session):
         record = get_conversation(session, identifier, user_id)
         changes = data.model_dump(exclude_unset=True)
-        if any(key in changes for key in ("scope", "document_ids", "knowledge_point_id")):
+        if any(key in changes for key in ("scope", "document_ids", "chapter_id")):
             if session.scalar(
                 select(Message.id).where(
                     Message.conversation_id == identifier, Message.status == "generating"
@@ -79,7 +79,7 @@ def update_conversation(session, identifier, user_id, data):
                 user_id,
                 changes.get("scope", record.scope),
                 changes.get("document_ids", record.document_ids),
-                changes.get("knowledge_point_id", record.knowledge_point_id),
+                changes.get("chapter_id", record.chapter_id),
             )
         for key, value in changes.items():
             setattr(record, key, value)
@@ -160,7 +160,7 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
             raise ApiError(
                 409,
                 "NO_READY_MATERIALS",
-                "当前资料范围没有可用于学习的资料。请切换资料范围、上传笔记，或先做题库练习。",
+                "当前资料范围没有可用于学习的资料。请切换资料范围、上传笔记，或先做 AI 练习。",
             )
         answer = Message(
             conversation_id=identifier,

@@ -105,15 +105,12 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .library-info { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: #fcfcf8; min-height: 105px; }
 .library-info h2 { font-size: 17px; margin-bottom: 8px; }
 .library-info p { margin-bottom: 0; }
-.library-next { color: var(--muted); font-size: 12px; line-height: 1.8; }
 .course-catalog { margin-top: 46px; }
 .catalog-search-label { margin: 0 0 9px; font-weight: 400; color: var(--muted); }
 .catalog-search { max-width: 460px; margin-bottom: 22px; font-size: 13px; }
 .catalog-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .chapter-card { border: 1px solid var(--line); border-radius: 10px; background: #fffefa; padding: 20px 24px; }
-.chapter-card summary { cursor: pointer; font-size: 15px; font-weight: 600; }
-.chapter-card summary span { float: right; font-size: 11px; font-weight: 400; color: var(--muted); }
-.chapter-card ul { padding-left: 24px; margin: 17px 0 0; font-size: 13px; line-height: 2.3; color: var(--muted); }
+.chapter-card[aria-pressed=true] { border-color: var(--accent); background: #e7eee8; font-weight: 600; }
 .document-panel { margin-top: 35px; padding: 26px; border: 1px solid var(--line); border-radius: 12px; background: #fffefa; }
 .upload-form { margin: 20px 0; padding: 18px 22px; border-radius: 9px; background: #f5f6f0; }
 .upload-form label { margin-top: 0; }
@@ -182,7 +179,6 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .attempt-history { padding-left: 20px; line-height: 2; }
 .summary-panel { margin-top: 24px; padding: 20px; border: 1px solid #dce5e5; border-radius: 12px; background: #f8faf7; }
 .summary-panel h2 { font-size: 18px; }
-.summary-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; margin: 16px 0; }
 .summary-panel > .primary-button { display: block; margin-top: 14px; }
 .report-panel { background: white; border: 1px solid #dce5e5; border-radius: 16px; padding: 24px; margin: 20px 0; min-width: 0; }
 .report-range { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-bottom: 20px; }

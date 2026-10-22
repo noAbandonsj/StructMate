@@ -15,30 +15,69 @@ from test_documents import ORIGIN, TestEmbedding, register, upload, wait_documen
 from capstone.core.settings import Settings
 from capstone.db.models import (
     Attempt,
-    KnowledgePoint,
+    Chapter,
     Message,
     PracticeItem,
     Question,
-    WrongQuestion,
 )
 from capstone.main import create_app
 from capstone.manage_questions import invalidate
 from capstone.services import practice as practice_service
 
 
+class FixtureGeneration:
+    """Deterministic AI output; never calls an external provider."""
+
+    available = True
+
+    def stream(self, messages, cancelled):
+        payload = json.loads(messages[1]["content"].split("\n待复核草稿：")[0])
+        yield json.dumps(
+            {
+                "items": [
+                    {
+                        "type": "true_false",
+                        "stem": payload["chapter"] + " / fixture " + str(index),
+                        "options": [
+                            {"key": "true", "text": "True"},
+                            {"key": "false", "text": "False"},
+                        ],
+                        "answer": "true",
+                        "explanation": "Test reference answer.",
+                        "difficulty": payload["difficulty"],
+                        "citation_numbers": [],
+                    }
+                    for index in range(payload["count"])
+                ]
+            }
+        )
+
+
 def create(client, headers, key="practice-1", **settings):
-    if (
-        settings.get("question_source") == "ai"
-        and not settings.get("knowledge_point_ids")
-        and not settings.get("document_ids")
-        and "topic" not in settings
-    ):
-        settings["topic"] = "数据结构概念辨析"
+    # Grading tests use a local model double through the real creation API.
+    fixture_model = settings.pop("question_source", "fixture") == "fixture"
+    selected = settings.pop("chapter_ids", [])
+    if selected:
+        settings["chapter_id"] = selected[0]
+    from capstone.seed import seed_course_data
+
+    seed_course_data(client.app.state.engine)
+    if not settings.get("chapter_id"):
+        settings["chapter_id"] = next(
+            chapter["id"]
+            for chapter in client.get("/api/v1/chapters").json()["items"]
+            if chapter["code"] == ("linear-list" if fixture_model else "stack-queue")
+        )
+    if fixture_model:
+        model = FixtureGeneration()
+        client.app.state.generation_service = model
+        client.app.state.practice_runner.generation = model
     response = client.post(
         "/api/v1/practice-sessions", headers=headers, json={"client_request_id": key, **settings}
     )
     assert response.status_code == 202, response.text
-    return response.json()
+    result = response.json()
+    return wait_practice(client, result["id"]) if fixture_model else result
 
 
 def items(client, identifier):
@@ -62,10 +101,38 @@ def answer_for(engine, item, correct=True):
 
 
 def submit(client, headers, item, answer, key="answer-1"):
-    return client.post(
-        f"/api/v1/practice-items/{item['id']}/attempts",
+    """Submit a one-question session through the actual group endpoint."""
+    from capstone.db.models import PracticeItem
+
+    with Session(client.app.state.engine) as session:
+        practice_id = session.get(PracticeItem, UUID(item["id"])).practice_session_id
+    response = client.post(
+        f"/api/v1/practice-sessions/{practice_id}/submit",
         headers=headers,
-        json={"client_request_id": key, "answer": answer},
+        json={
+            "client_request_id": key,
+            "answers": [{"practice_item_id": item["id"], "answer": answer}],
+        },
+    )
+    if response.status_code == 201:
+        from httpx import Response
+
+        return Response(201, json=response.json()["items"][0]["attempt"])
+    return response
+
+
+def submit_group(client, headers, engine, exercise, correct):
+    questions = items(client, exercise["id"])
+    return client.post(
+        f"/api/v1/practice-sessions/{exercise['id']}/submit",
+        headers=headers,
+        json={
+            "client_request_id": "group",
+            "answers": [
+                {"practice_item_id": item["id"], "answer": answer_for(engine, item, correct(index))}
+                for index, item in enumerate(questions)
+            ],
+        },
     )
 
 
@@ -79,54 +146,28 @@ def wait_practice(client, identifier, expected="ready"):
         time.sleep(0.03)
 
 
-def test_bank_snapshot_hidden_answers_scoring_and_idempotency(bank_database, tmp_path):
-    settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    with TestClient(create_app(settings)) as client:
+def test_ai_questions_keep_hidden_answers_until_group_grading(practice_db, tmp_path):
+    with TestClient(
+        create_app(Settings(_env_file=None, environment="test", data_dir=tmp_path))
+    ) as client:
         _, headers = register(client)
-        practice = create(client, headers)
-        assert practice["status"] == "ready" and practice["actual_count"] == 5
-        assert create(client, headers)["id"] == practice["id"]
+        exercise = create(client, headers)
+        for item in items(client, exercise["id"]):
+            assert item["attempt"] is None and "answer" not in item and "explanation" not in item
+        response = submit_group(client, headers, practice_db, exercise, lambda index: index != 0)
+        assert response.status_code == 201
+        assert response.json()["practice"]["correct_count"] == 4
+        repeated = submit_group(client, headers, practice_db, exercise, lambda index: index != 0)
+        assert [i["attempt"]["id"] for i in repeated.json()["items"]] == [
+            i["attempt"]["id"] for i in response.json()["items"]
+        ]
         assert (
-            client.post(
-                "/api/v1/practice-sessions",
-                headers=headers,
-                json={"client_request_id": "practice-1", "count": 2},
-            ).status_code
+            submit_group(client, headers, practice_db, exercise, lambda index: True).status_code
             == 409
         )
-        questions = items(client, practice["id"])
-        for item in questions:
-            assert item["attempt"] is None
-            assert "answer" not in item and "explanation" not in item and "source_info" not in item
-            assert "snapshot" not in item and item["hint"] is None
-        item = questions[0]
-        answer = answer_for(bank_database, item, False)
-        result = submit(client, headers, item, answer)
-        assert result.status_code == 201 and result.json()["is_correct"] is False
-        assert result.json()["wrong_question_id"]
-        assert result.json()["source_info"]["verification"]["checked_on"]
-        assert submit(client, headers, item, answer).json()["id"] == result.json()["id"]
-        assert (
-            submit(client, headers, item, answer, "another-key").json()["id"] == result.json()["id"]
-        )
-        assert submit(client, headers, item, answer_for(bank_database, item)).status_code == 409
-        for item in questions[1:]:
-            assert (
-                submit(
-                    client, headers, item, answer_for(bank_database, item), item["id"]
-                ).status_code
-                == 201
-            )
-        completed = client.get(f"/api/v1/practice-sessions/{practice['id']}").json()
-        assert completed["status"] == "completed" and completed["correct_count"] == 4
-        assert completed["submitted_count"] == 5
-        assert all(item["attempt"] is not None for item in items(client, practice["id"]))
-        with Session(bank_database) as session:
-            assert session.scalar(select(func.count()).select_from(Attempt)) == 5
-            assert session.scalar(select(func.count()).select_from(WrongQuestion)) == 1
 
 
-def test_personal_practice_wrong_questions_and_origin_are_isolated(bank_database, tmp_path):
+def test_personal_practice_wrong_questions_and_origin_are_isolated(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as first:
         second = TestClient(first.app)
@@ -135,7 +176,7 @@ def test_personal_practice_wrong_questions_and_origin_are_isolated(bank_database
             _, other = register(second, "second")
             practice = create(first, headers, count=1)
             item = items(first, practice["id"])[0]
-            wrong = submit(first, headers, item, answer_for(bank_database, item, False)).json()[
+            wrong = submit(first, headers, item, answer_for(practice_db, item, False)).json()[
                 "wrong_question_id"
             ]
             for response in (
@@ -143,11 +184,6 @@ def test_personal_practice_wrong_questions_and_origin_are_isolated(bank_database
                 second.get(f"/api/v1/practice-sessions/{practice['id']}/items"),
                 submit(second, other, item, item["options"][0]["key"]),
                 second.post(f"/api/v1/practice-items/{item['id']}/hint", headers=other),
-                second.post(
-                    f"/api/v1/practice-items/{item['id']}/feedback",
-                    headers=other,
-                    json={"reason": "这道题似乎有错误"},
-                ),
                 second.get(f"/api/v1/wrong-questions/{wrong}"),
                 second.post(
                     "/api/v1/wrong-questions/review-sessions",
@@ -162,7 +198,7 @@ def test_personal_practice_wrong_questions_and_origin_are_isolated(bank_database
                 first.post(
                     "/api/v1/practice-sessions",
                     headers=ORIGIN,
-                    json={"client_request_id": "missing-csrf"},
+                    json={"client_request_id": "missing-csrf", "chapter_id": str(UUID(int=1))},
                 ).status_code
                 == 403
             )
@@ -170,30 +206,23 @@ def test_personal_practice_wrong_questions_and_origin_are_isolated(bank_database
             second.close()
 
 
-def test_hint_repeat_and_review_categories_do_not_inflate_independent_sample(
-    bank_database, tmp_path
-):
+def test_hint_repeat_and_review_categories_do_not_inflate_independent_sample(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    with Session(bank_database) as session:
-        point = str(
-            session.scalar(
-                select(KnowledgePoint.id).where(KnowledgePoint.code == "linear-list.definition")
-            )
-        )
+    with Session(practice_db) as session:
+        point = str(session.scalar(select(Chapter.id).where(Chapter.code == "linear-list")))
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
-        practice = create(client, headers, count=5, knowledge_point_ids=[point])
-        assert practice["actual_count"] == 1 and "实际 1 道" in practice["notice"]
+        practice = create(client, headers, count=1, chapter_ids=[point])
         item = items(client, practice["id"])[0]
         hint_url = f"/api/v1/practice-items/{item['id']}/hint"
         assert client.post(hint_url, headers=headers).json()["hinted"]
         assert client.post(hint_url, headers=headers).status_code == 200
-        result = submit(client, headers, item, answer_for(bank_database, item, False)).json()
+        result = submit(client, headers, item, answer_for(practice_db, item, False)).json()
         assert result["category"] == "first_hinted" and result["hinted"]
-        practice = create(client, headers, "repeat", count=1, knowledge_point_ids=[point])
+        practice = create(client, headers, "repeat", count=1, chapter_ids=[point])
         item = items(client, practice["id"])[0]
         assert (
-            submit(client, headers, item, answer_for(bank_database, item)).json()["category"]
+            submit(client, headers, item, answer_for(practice_db, item)).json()["category"]
             == "repeat"
         )
         analysis = client.get("/api/v1/learning/performance").json()
@@ -205,7 +234,7 @@ def test_hint_repeat_and_review_categories_do_not_inflate_independent_sample(
         )
 
 
-def test_wrong_review_distinct_shanghai_dates_and_reset(bank_database, tmp_path, monkeypatch):
+def test_wrong_review_distinct_shanghai_dates_and_reset(practice_db, tmp_path, monkeypatch):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     clock = [datetime(2026, 10, 14, 15, 58, tzinfo=UTC)]
     monkeypatch.setattr(practice_service, "utc_now", lambda: clock[0])
@@ -213,7 +242,7 @@ def test_wrong_review_distinct_shanghai_dates_and_reset(bank_database, tmp_path,
         _, headers = register(client)
         original = create(client, headers, count=1)
         item = items(client, original["id"])[0]
-        first = submit(client, headers, item, answer_for(bank_database, item, False)).json()
+        first = submit(client, headers, item, answer_for(practice_db, item, False)).json()
         wrong_id = first["wrong_question_id"]
         dates = [
             datetime(2026, 10, 14, 15, 59, tzinfo=UTC),
@@ -233,10 +262,10 @@ def test_wrong_review_distinct_shanghai_dates_and_reset(bank_database, tmp_path,
             )
             assert review.status_code == 202
             practice = review.json()
-            assert practice["mode"] == "review" and practice["question_source"] is None
+            assert practice["mode"] == "review"
             reviewed = items(client, practice["id"])[0]
             result = submit(
-                client, headers, reviewed, answer_for(bank_database, reviewed, index < 3)
+                client, headers, reviewed, answer_for(practice_db, reviewed, index < 3)
             ).json()
             assert result["category"] == "review"
             wrong = client.get("/api/v1/wrong-questions/" + wrong_id).json()
@@ -247,30 +276,21 @@ def test_wrong_review_distinct_shanghai_dates_and_reset(bank_database, tmp_path,
         assert history["error_count"] == 2
 
 
-def test_feedback_invalidation_and_distributed_snapshots_are_immutable(bank_database, tmp_path):
+def test_invalidation_and_distributed_snapshots_are_immutable(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
         practice = create(client, headers, count=1)
         item = items(client, practice["id"])[0]
-        feedback_url = f"/api/v1/practice-items/{item['id']}/feedback"
-        assert (
-            client.post(
-                feedback_url, headers=headers, json={"reason": "这个选项与解析矛盾"}
-            ).status_code
-            == 409
-        )
-        result = submit(client, headers, item, answer_for(bank_database, item, False)).json()
-        assert (
-            client.post(
-                feedback_url, headers=headers, json={"reason": "这个选项与解析矛盾"}
-            ).status_code
-            == 200
-        )
+        result = submit(client, headers, item, answer_for(practice_db, item, False)).json()
         for model, values in ((PracticeItem, {"snapshot": {}}), (Question, {"content": {}})):
-            with pytest.raises(IntegrityError), Session(bank_database) as session, session.begin():
+            with (
+                pytest.raises(IntegrityError),
+                Session(practice_db) as session,
+                session.begin(),
+            ):
                 session.execute(update(model).values(**values))
-        invalidate(bank_database, UUID(item["question_id"]), "维护者确认题目条件不完整")
+        invalidate(practice_db, UUID(item["question_id"]), "维护者确认题目条件不完整")
         assert client.get("/api/v1/wrong-questions").json()["total"] == 0
         assert (
             client.get("/api/v1/wrong-questions/" + result["wrong_question_id"]).json()["is_valid"]
@@ -287,49 +307,38 @@ def test_feedback_invalidation_and_distributed_snapshots_are_immutable(bank_data
         )
 
 
-def test_simultaneous_submissions_only_create_one_attempt(bank_database, tmp_path):
+def test_simultaneous_submissions_only_create_one_attempt(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
         practice = create(client, headers, count=1)
         item = items(client, practice["id"])[0]
-        correct = answer_for(bank_database, item)
+        correct = answer_for(practice_db, item)
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(
                 pool.map(lambda key: submit(client, headers, item, correct, key), ["one", "two"])
             )
         assert all(result.status_code == 201 for result in results)
         assert results[0].json()["id"] == results[1].json()["id"]
-        with Session(bank_database) as session:
+        with Session(practice_db) as session:
             assert session.scalar(select(func.count()).select_from(Attempt)) == 1
 
 
-def test_ai_unconfigured_preserves_mode_and_bank_does_not_require_models(bank_database, tmp_path):
+def test_ai_unconfigured_preserves_settings_without_fallback(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
         failed = create(
             client, headers, question_source="ai", generation_requirements="侧重概念辨析"
         )
-        assert failed["status"] == "failed" and failed["question_source"] == "ai"
+        assert failed["status"] == "failed"
         assert failed["settings"]["generation_requirements"] == "侧重概念辨析"
         assert items(client, failed["id"]) == []
-        assert create(client, headers, "bank", question_source="bank")["status"] == "ready"
 
 
-@pytest.mark.parametrize(
-    ("mode", "strategy"),
-    [("chapter", "不按历史正确率改变选题重点"), ("adaptive", "优先巩固样本足够且正确率偏低")],
-)
-def test_ai_concept_questions_accept_structure_without_template_verification(
-    bank_database, tmp_path, mode, strategy
-):
-    with Session(bank_database) as session:
-        point = str(
-            session.scalar(
-                select(KnowledgePoint.id).where(KnowledgePoint.code == "linear-list.definition")
-            )
-        )
+def test_ai_concept_questions_accept_structure_without_template_verification(practice_db, tmp_path):
+    with Session(practice_db) as session:
+        point = str(session.scalar(select(Chapter.id).where(Chapter.code == "linear-list")))
 
     class ConceptGeneration:
         available = True
@@ -337,7 +346,8 @@ def test_ai_concept_questions_accept_structure_without_template_verification(
         def stream(self, messages, cancelled):
             requirements = json.loads(messages[1]["content"].split("\n待复核草稿：")[0])
             assert "mode" not in requirements
-            assert "围绕本次学习目标出题" in requirements["strategy"]
+            assert requirements["chapter"] == "线性表"
+            assert "strategy" not in requirements
             yield json.dumps(
                 {
                     "items": [
@@ -351,7 +361,7 @@ def test_ai_concept_questions_accept_structure_without_template_verification(
                             "answer": "false",
                             "explanation": "同一逻辑结构可以采用不同存储布局。",
                             "hint": "区分逻辑关系与物理位置。",
-                            "knowledge_point_id": point,
+                            "chapter_id": point,
                             "difficulty": "basic",
                             "citation_numbers": [],
                         }
@@ -363,22 +373,19 @@ def test_ai_concept_questions_accept_structure_without_template_verification(
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings, generation_service=ConceptGeneration())) as client:
         _, headers = register(client)
-        practice = create(
-            client, headers, question_source="ai", mode=mode, count=1, knowledge_point_ids=[point]
-        )
+        practice = create(client, headers, question_source="ai", count=1, chapter_ids=[point])
         wait_practice(client, practice["id"])
         item = items(client, practice["id"])[0]
-        assert item["source_type"] == "ai" and item["attempt"] is None
+        assert item["attempt"] is None
         result = submit(client, headers, item, "false").json()
-        assert result["is_correct"] and result["source_info"]["verification"] is None
+        assert result["is_correct"]
         repeated = create(
             client,
             headers,
             "same-generated-question",
             question_source="ai",
-            mode=mode,
             count=1,
-            knowledge_point_ids=[point],
+            chapter_ids=[point],
         )
         wait_practice(client, repeated["id"])
         repeated_item = items(client, repeated["id"])[0]
@@ -386,14 +393,14 @@ def test_ai_concept_questions_accept_structure_without_template_verification(
         assert submit(client, headers, repeated_item, "false").json()["category"] == "repeat"
 
 
-def test_populated_practice_migration_down_and_up(bank_database, migration_config, tmp_path):
+def test_populated_practice_migration_down_and_up(practice_db, migration_config, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
         practice = create(client, headers, count=1)
         item = items(client, practice["id"])[0]
         assert (
-            submit(client, headers, item, answer_for(bank_database, item, False)).status_code == 201
+            submit(client, headers, item, answer_for(practice_db, item, False)).status_code == 201
         )
     command.downgrade(migration_config, "0003")
     command.upgrade(migration_config, "head")
@@ -401,13 +408,9 @@ def test_populated_practice_migration_down_and_up(bank_database, migration_confi
 
 
 @pytest.mark.parametrize("review_fails", [False, True])
-def test_ai_drafts_are_not_published_until_review_succeeds(bank_database, tmp_path, review_fails):
-    with Session(bank_database) as session:
-        point = str(
-            session.scalar(
-                select(KnowledgePoint.id).where(KnowledgePoint.code == "stack-queue.stack")
-            )
-        )
+def test_ai_drafts_are_not_published_until_review_succeeds(practice_db, tmp_path, review_fails):
+    with Session(practice_db) as session:
+        point = str(session.scalar(select(Chapter.id).where(Chapter.code == "stack-queue")))
 
     class ReviewedGeneration:
         available = True
@@ -415,15 +418,8 @@ def test_ai_drafts_are_not_published_until_review_succeeds(bank_database, tmp_pa
 
         def stream(self, messages, cancelled):
             self.calls += 1
-            with Session(bank_database) as session:
-                assert (
-                    session.scalar(
-                        select(func.count())
-                        .select_from(Question)
-                        .where(Question.source_type == "ai")
-                    )
-                    == 0
-                )
+            with Session(practice_db) as session:
+                assert session.scalar(select(func.count()).select_from(Question)) == 0
             if self.calls == 2:
                 assert "独立复核草稿" in messages[0]["content"]
                 assert "待复核草稿" in messages[1]["content"]
@@ -439,7 +435,7 @@ def test_ai_drafts_are_not_published_until_review_succeeds(bank_database, tmp_pa
                             "options": [{"key": "A", "text": "1"}, {"key": "B", "text": "2"}],
                             "answer": "A" if self.calls == 1 else "B",
                             "explanation": "后进先出，2 最后入栈，因此弹出 2。",
-                            "knowledge_point_id": point,
+                            "chapter_id": point,
                             "difficulty": "basic",
                             "citation_numbers": [],
                         }
@@ -452,34 +448,21 @@ def test_ai_drafts_are_not_published_until_review_succeeds(bank_database, tmp_pa
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with TestClient(create_app(settings, generation_service=generation)) as client:
         _, headers = register(client)
-        practice = create(
-            client, headers, question_source="ai", count=1, knowledge_point_ids=[point]
-        )
+        practice = create(client, headers, question_source="ai", count=1, chapter_ids=[point])
         wait_practice(client, practice["id"], "failed" if review_fails else "ready")
         assert generation.calls == 2
         if review_fails:
             assert items(client, practice["id"]) == []
-            with Session(bank_database) as session:
-                assert (
-                    session.scalar(
-                        select(func.count())
-                        .select_from(Question)
-                        .where(Question.source_type == "ai")
-                    )
-                    == 0
-                )
+            with Session(practice_db) as session:
+                assert session.scalar(select(func.count()).select_from(Question)) == 0
         else:
             item = items(client, practice["id"])[0]
             assert submit(client, headers, item, "B").json()["is_correct"]
 
 
-def test_ai_history_marks_deleted_document_sources(bank_database, tmp_path):
-    with Session(bank_database) as session:
-        point = str(
-            session.scalar(
-                select(KnowledgePoint.id).where(KnowledgePoint.code == "stack-queue.stack")
-            )
-        )
+def test_ai_history_marks_deleted_document_sources(practice_db, tmp_path):
+    with Session(practice_db) as session:
+        point = str(session.scalar(select(Chapter.id).where(Chapter.code == "stack-queue")))
 
     class CitedGeneration:
         available = True
@@ -498,7 +481,7 @@ def test_ai_history_marks_deleted_document_sources(bank_database, tmp_path):
                             "answer": "true",
                             "explanation": "栈顶执行入栈和出栈。",
                             "hint": "从栈顶操作考虑。",
-                            "knowledge_point_id": point,
+                            "chapter_id": point,
                             "difficulty": "basic",
                             "citation_numbers": [1],
                         }
@@ -517,7 +500,12 @@ def test_ai_history_marks_deleted_document_sources(bank_database, tmp_path):
         document = upload(client, library, headers)["document"]["id"]
         wait_document(client, document, "ready")
         practice = create(
-            client, headers, question_source="ai", count=1, knowledge_point_ids=[point]
+            client,
+            headers,
+            question_source="ai",
+            count=1,
+            chapter_ids=[point],
+            document_ids=[document],
         )
         wait_practice(client, practice["id"])
         item = items(client, practice["id"])[0]
@@ -531,14 +519,10 @@ def test_ai_history_marks_deleted_document_sources(bank_database, tmp_path):
 
 
 def test_conversation_context_is_carried_to_ai_practice_and_checked_for_owner(
-    bank_database, tmp_path
+    practice_db, tmp_path
 ):
-    with Session(bank_database) as session:
-        point = str(
-            session.scalar(
-                select(KnowledgePoint.id).where(KnowledgePoint.code == "linear-list.definition")
-            )
-        )
+    with Session(practice_db) as session:
+        point = str(session.scalar(select(Chapter.id).where(Chapter.code == "linear-list")))
     contexts = []
 
     class ContextGeneration:
@@ -558,7 +542,7 @@ def test_conversation_context_is_carried_to_ai_practice_and_checked_for_owner(
                             ],
                             "answer": "true",
                             "explanation": "逻辑关系与存储布局分开。",
-                            "knowledge_point_id": point,
+                            "chapter_id": point,
                             "difficulty": "basic",
                             "citation_numbers": [],
                         }
@@ -571,9 +555,9 @@ def test_conversation_context_is_carried_to_ai_practice_and_checked_for_owner(
     with TestClient(create_app(settings, generation_service=ContextGeneration())) as client:
         _, headers = register(client)
         conversation = client.post(
-            "/api/v1/conversations", headers=headers, json={"knowledge_point_id": point}
+            "/api/v1/conversations", headers=headers, json={"chapter_id": point}
         ).json()["id"]
-        with Session(bank_database) as session, session.begin():
+        with Session(practice_db) as session, session.begin():
             session.add(
                 Message(
                     conversation_id=UUID(conversation),
@@ -589,7 +573,7 @@ def test_conversation_context_is_carried_to_ai_practice_and_checked_for_owner(
             question_source="ai",
             count=1,
             source_conversation_id=conversation,
-            knowledge_point_ids=[point],
+            chapter_ids=[point],
         )
         wait_practice(client, practice["id"])
         assert practice["source_conversation_id"] == conversation
@@ -603,6 +587,7 @@ def test_conversation_context_is_carried_to_ai_practice_and_checked_for_owner(
                     headers=other_headers,
                     json={
                         "client_request_id": "foreign-conversation",
+                        "chapter_id": point,
                         "source_conversation_id": conversation,
                     },
                 ).status_code
@@ -614,53 +599,41 @@ def test_conversation_context_is_carried_to_ai_practice_and_checked_for_owner(
 
 
 @pytest.mark.parametrize("correct_count,expected", [(2, "priority"), (3, "steady")])
-def test_performance_threshold_and_repeat_exclusion(
-    bank_database, tmp_path, correct_count, expected
-):
+def test_performance_threshold_and_repeat_exclusion(practice_db, tmp_path, correct_count, expected):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
-    with Session(bank_database) as session:
-        root = str(
-            session.scalar(select(KnowledgePoint.id).where(KnowledgePoint.code == "linear-list"))
-        )
+    with Session(practice_db) as session:
+        root = str(session.scalar(select(Chapter.id).where(Chapter.code == "linear-list")))
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
-        practice = create(client, headers, count=5, knowledge_point_ids=[root])
-        for index, item in enumerate(items(client, practice["id"])):
-            assert (
-                submit(
-                    client,
-                    headers,
-                    item,
-                    answer_for(bank_database, item, index < correct_count),
-                    item["id"],
-                ).status_code
-                == 201
-            )
+        practice = create(client, headers, count=5, chapter_ids=[root])
+        assert (
+            submit_group(
+                client, headers, practice_db, practice, lambda index: index < correct_count
+            ).status_code
+            == 201
+        )
         analysis = client.get("/api/v1/learning/performance").json()
-        row = next(value for value in analysis["items"] if value["knowledge_point_id"] == root)
+        row = next(value for value in analysis["items"] if value["chapter_id"] == root)
         assert row["sample_count"] == 5 and row["accuracy"] == correct_count / 5
         assert row["status"] == expected
-        repeated = create(client, headers, "again", count=5, knowledge_point_ids=[root])
-        for item in items(client, repeated["id"]):
-            assert (
-                submit(client, headers, item, answer_for(bank_database, item), item["id"]).json()[
-                    "category"
-                ]
-                == "repeat"
-            )
+        repeated = create(client, headers, "again", count=5, chapter_ids=[root])
+        results = submit_group(client, headers, practice_db, repeated, lambda index: True).json()[
+            "items"
+        ]
+        assert all(item["attempt"]["category"] == "repeat" for item in results)
         row = next(
             value
             for value in client.get("/api/v1/learning/performance").json()["items"]
-            if value["knowledge_point_id"] == root
+            if value["chapter_id"] == root
         )
         assert row["sample_count"] == 5 and row["correct_count"] == correct_count
-        with Session(bank_database) as session, session.begin():
+        with Session(practice_db) as session, session.begin():
             first = session.scalar(select(Attempt).where(Attempt.category == "first_independent"))
             first.created_at -= timedelta(days=31)
         row = next(
             value
             for value in client.get("/api/v1/learning/performance").json()["items"]
-            if value["knowledge_point_id"] == root
+            if value["chapter_id"] == root
         )
         assert row["sample_count"] == 4 and row["status"] == "insufficient"
 
@@ -668,7 +641,7 @@ def test_performance_threshold_and_repeat_exclusion(
 @pytest.mark.parametrize(
     "output", ["not-json", '{"items":[]}', '{"items":[{"answer":"secret-test-value"}]}']
 )
-def test_invalid_ai_output_does_not_publish_questions_or_fallback(bank_database, tmp_path, output):
+def test_invalid_ai_output_does_not_publish_questions_or_fallback(practice_db, tmp_path, output):
     class BrokenGeneration:
         available = True
 
@@ -680,13 +653,8 @@ def test_invalid_ai_output_does_not_publish_questions_or_fallback(bank_database,
         _, headers = register(client)
         practice = create(client, headers, question_source="ai", count=1)
         failed = wait_practice(client, practice["id"], "failed")
-        assert failed["question_source"] == "ai" and failed["error_code"] == "AI_QUESTIONS_INVALID"
+        assert failed["error_code"] == "AI_QUESTIONS_INVALID"
         assert "secret-test-value" not in failed["error_message"]
         assert items(client, practice["id"]) == []
-        with Session(bank_database) as session:
-            assert (
-                session.scalar(
-                    select(func.count()).select_from(Question).where(Question.source_type == "ai")
-                )
-                == 0
-            )
+        with Session(practice_db) as session:
+            assert session.scalar(select(func.count()).select_from(Question)) == 0

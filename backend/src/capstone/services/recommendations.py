@@ -8,33 +8,31 @@ from capstone.db.models import (
     Document,
     DocumentChunk,
     KnowledgeBase,
-    KnowledgePoint,
     Question,
     Resource,
     WrongQuestion,
 )
+from capstone.services.chapters import chapters
 
 LEVELS = {"basic": 0, "intermediate": 1, "advanced": 2}
 
 
 def recommendations(session, user_id, point_id=None, difficulty="basic", limit=6):
-    points = session.scalars(
-        select(KnowledgePoint).order_by(KnowledgePoint.sort_order, KnowledgePoint.code)
-    ).all()
+    points = chapters(session)
     by_id = {point.id: point for point in points}
     if point_id and point_id not in by_id:
-        raise ApiError(422, "KNOWLEDGE_POINT_INVALID", "所选知识点不存在。")
-    roots = {point.code: point for point in points if point.parent_id is None}
+        raise ApiError(422, "CHAPTER_INVALID", "所选章节不存在。")
+    roots = {point.code: point for point in points}
 
     def chapter(identifier):
-        return by_id[identifier].code.split(".")[0] if identifier in by_id else None
+        return by_id[identifier].code if identifier in by_id else None
 
     target = chapter(point_id)
     related = [point.id for point in points if not target or chapter(point.id) == target]
     pending = Counter(
         chapter(identifier)
         for identifier in session.scalars(
-            select(Question.knowledge_point_id)
+            select(Question.chapter_id)
             .join(WrongQuestion, WrongQuestion.question_id == Question.id)
             .where(
                 WrongQuestion.user_id == user_id,
@@ -47,7 +45,7 @@ def recommendations(session, user_id, point_id=None, difficulty="basic", limit=6
 
     def describe(identifier, level):
         root = chapter(identifier)
-        name = roots[root].name if root in roots else "未标注知识点"
+        name = roots[root].name if root in roots else "未分类"
         reasons = [f"同属{name}章节" if target else f"{name}的学习资料"]
         if pending[root]:
             reasons.append(f"该章有 {pending[root]} 道有效待复习题，可结合原错题阅读")
@@ -60,9 +58,7 @@ def recommendations(session, user_id, point_id=None, difficulty="basic", limit=6
         return reasons
 
     for resource in session.scalars(
-        select(Resource).where(
-            Resource.is_active.is_(True), Resource.knowledge_point_id.in_(related)
-        )
+        select(Resource).where(Resource.is_active.is_(True), Resource.chapter_id.in_(related))
     ):
         candidates.append(
             {
@@ -73,14 +69,14 @@ def recommendations(session, user_id, point_id=None, difficulty="basic", limit=6
                 "url": resource.url,
                 "language": resource.language,
                 "difficulty": resource.difficulty,
-                "knowledge_point_id": str(resource.knowledge_point_id),
+                "chapter_id": str(resource.chapter_id),
                 "source_info": resource.source_info,
-                "reasons": describe(resource.knowledge_point_id, resource.difficulty),
+                "reasons": describe(resource.chapter_id, resource.difficulty),
             }
         )
 
     # One current chunk per readable ready document; exclude all historical revisions.
-    effective_point = func.coalesce(DocumentChunk.knowledge_point_id, Document.knowledge_point_id)
+    effective_point = func.coalesce(DocumentChunk.chapter_id, Document.chapter_id)
     eligible = (
         select(
             DocumentChunk.id.label("chunk_id"),
@@ -123,7 +119,7 @@ def recommendations(session, user_id, point_id=None, difficulty="basic", limit=6
                 "url": f"/api/v1/documents/{document.id}/file",
                 "document_id": str(document.id),
                 "chunk_id": str(chunk.id),
-                "knowledge_point_id": str(identifier) if identifier else None,
+                "chapter_id": str(identifier) if identifier else None,
                 "difficulty": None,
                 "language": "原文",
                 "source_info": document.source_info,
@@ -136,7 +132,7 @@ def recommendations(session, user_id, point_id=None, difficulty="basic", limit=6
         )
 
     def priority(item):
-        identifier = next((key for key in by_id if str(key) == item["knowledge_point_id"]), None)
+        identifier = next((key for key in by_id if str(key) == item["chapter_id"]), None)
         return (
             -pending[chapter(identifier)],
             abs(LEVELS.get(item["difficulty"], LEVELS[difficulty]) - LEVELS[difficulty]),

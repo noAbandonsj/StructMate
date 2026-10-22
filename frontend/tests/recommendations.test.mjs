@@ -18,7 +18,7 @@ async function until(predicate) {
   assert.ok(predicate(), 'state did not settle')
 }
 function defaults(url) {
-  if (url.includes('/knowledge-points')) return Promise.resolve(response({ items: [], total: 0 }))
+  if (url.includes('/chapters')) return Promise.resolve(response({ items: [], total: 0 }))
   if (url.includes('/chunks/')) return Promise.resolve(response({ id: 'chunk', text: '真实片段' }))
   return Promise.resolve(response(result('current')))
 }
@@ -29,7 +29,7 @@ function scope(user, point = '') {
 }
 test('changing context rejects a late previous recommendation list', async () => {
   let release
-  globalThis.fetch = url => url.includes('knowledge_point_id=old') ? new Promise(resolve => { release = resolve }) : defaults(url)
+  globalThis.fetch = url => url.includes('chapter_id=old') ? new Promise(resolve => { release = resolve }) : defaults(url)
   const view = scope('context-owner', 'old')
   try {
     await until(() => release)
@@ -41,7 +41,7 @@ test('changing context rejects a late previous recommendation list', async () =>
 test('failure and retry keep the chosen point and difficulty', async () => {
   let fail = false, requested
   globalThis.fetch = url => {
-    if (!url.includes('/knowledge-points')) { requested = url; if (fail) return Promise.reject(new Error('offline')) }
+    if (!url.includes('/chapters')) { requested = url; if (fail) return Promise.reject(new Error('offline')) }
     return defaults(url)
   }
   const view = scope('filter-owner')
@@ -51,7 +51,7 @@ test('failure and retry keep the chosen point and difficulty', async () => {
     await view.reload(); assert.ok(view.state.error)
     assert.equal(view.state.point, 'tree'); assert.equal(view.state.difficulty, 'advanced')
     fail = false; await view.reload()
-    assert.ok(requested.includes('difficulty=advanced') && requested.includes('knowledge_point_id=tree'))
+    assert.ok(requested.includes('difficulty=advanced') && requested.includes('chapter_id=tree'))
     assert.equal(view.state.error, '')
   } finally { view.effect.stop() }
 })

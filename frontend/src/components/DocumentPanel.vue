@@ -3,12 +3,12 @@ import { computed, ref, toRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { documentFileUrl } from '../api/documents'
-import type { LibraryInfo, KnowledgePoint } from '../api/knowledge'
+import type { LibraryInfo, Chapter } from '../api/knowledge'
 import { useDocuments } from '../state/documents'
 import { safeSourceLink } from '../links'
 import CourseDocumentDetails from './CourseDocumentDetails.vue'
 
-const props = defineProps<{ library: LibraryInfo; points: KnowledgePoint[]; management?: boolean }>()
+const props = defineProps<{ library: LibraryInfo; chapters: Chapter[]; management?: boolean; chapterId?: string }>()
 const { state, reload, upload, process, remove, setPage, setFilters } = useDocuments(toRef(props, 'library'), props.management)
 const writable = computed(() => props.management || !props.library.is_readonly)
 const attribution = ref({ author: '', source: '', license: '' })
@@ -17,18 +17,15 @@ const search = ref('')
 const status = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const file = ref<File | null>(null)
-const pointId = ref('')
+const chapterId = ref('')
 const confirmId = ref<string | null>(null)
 const localError = ref('')
 const statusLabels = { processing: '处理中', ready: '可用于学习', failed: '处理失败', deleted: '已删除' }
-const orderedPoints = computed(() => {
-  const roots = props.points.filter(point => !point.parent_id).sort((a, b) => a.sort_order - b.sort_order)
-  return roots.flatMap(root => [root, ...props.points.filter(point => point.parent_id === root.id).sort((a, b) => a.sort_order - b.sort_order)])
-})
 
+watch(() => props.chapterId, value => { void setFilters(search.value, status.value, value || '') }, { immediate: true })
 watch(() => props.library.id, () => {
   file.value = null
-  pointId.value = ''
+  chapterId.value = ''
   confirmId.value = null
   localError.value = ''
 })
@@ -49,7 +46,7 @@ async function submit() {
   }
   localError.value = ''
   const submitted = file.value
-  if (await upload(submitted, pointId.value, props.management ? attribution.value : undefined)) {
+  if (await upload(submitted, chapterId.value, props.management ? attribution.value : undefined)) {
     if (props.management) { search.value = ''; status.value = '' }
     if (file.value === submitted) {
       file.value = null
@@ -70,7 +67,7 @@ function markSelfAuthored() {
     attribution.value.license = '作者授权本课程学习使用'
   }
 }
-function pointName(id: string | null) { return props.points.find(point => point.id === id)?.name || '未关联知识点' }
+function chapterName(id: string | null) { return props.chapters.find(point => point.id === id)?.name || '未分类' }
 </script>
 
 <template>
@@ -91,10 +88,10 @@ function pointName(id: string | null) { return props.points.find(point => point.
         <input id="document-file" ref="fileInput" type="file" accept=".pdf,.txt,.md,.markdown" @change="chooseFile">
         <p class="field-help">支持文本型 PDF、TXT、Markdown{{ state.config ? '，单文件最多 ' + state.config.max_mib + ' MiB' : '' }}；扫描或加密 PDF 暂不支持。</p>
         <div v-if="management" class="course-upload-fields">
-          <label for="course-point">关联课程知识点</label>
-          <select id="course-point" v-model="pointId" required>
-            <option value="">请选择知识点</option>
-            <option v-for="point in orderedPoints" :key="point.id" :value="point.id">{{ point.parent_id ? '　' : '' }}{{ point.name }}</option>
+          <label for="course-point">关联课程章节</label>
+          <select id="course-point" v-model="chapterId" required>
+            <option value="">请选择章节</option>
+            <option v-for="point in chapters" :key="point.id" :value="point.id">{{ point.name }}</option>
           </select>
           <label for="course-author">作者</label><input id="course-author" v-model="attribution.author" required maxlength="200" placeholder="作者或编写者">
           <label class="self-authored"><input v-model="selfAuthored" type="checkbox" @change="markSelfAuthored">这是我编写的资料（自动填写来源与许可，可修改）</label>
@@ -102,10 +99,10 @@ function pointName(id: string | null) { return props.points.find(point => point.
           <label for="course-license">许可说明</label><input id="course-license" v-model="attribution.license" required maxlength="1000" placeholder="例如：作者授权本课程学习使用">
         </div>
         <details v-else class="upload-options">
-          <summary>关联知识点（选填）</summary>
-          <select v-model="pointId" aria-label="关联知识点">
+          <summary>关联章节（选填）</summary>
+          <select v-model="chapterId" aria-label="关联章节">
             <option value="">暂不指定</option>
-            <option v-for="point in points" :key="point.id" :value="point.id">{{ point.name }}</option>
+            <option v-for="point in chapters" :key="point.id" :value="point.id">{{ point.name }}</option>
           </select>
         </details>
         <button class="primary-button" type="submit" :disabled="!file || !state.config">
@@ -137,7 +134,7 @@ function pointName(id: string | null) { return props.points.find(point => point.
         <div class="document-main">
           <strong>{{ document.filename }}</strong>
           <p class="field-help">{{ document.file_type.toUpperCase() }} · {{ sizeLabel(document.size_bytes) }}</p>
-          <p v-if="management" class="field-help">{{ pointName(document.knowledge_point_id) }} · 更新于 {{ new Date(document.updated_at).toLocaleString('zh-CN') }}</p>
+          <p class="field-help">{{ chapterName(document.chapter_id) }} · 更新于 {{ new Date(document.updated_at).toLocaleString('zh-CN') }}</p>
           <span class="document-status" :class="document.status">{{ statusLabels[document.status] }}</span>
           <p v-if="library.is_readonly && !management && document.status === 'failed'" class="document-error">课程资料待维护者处理，暂不可用于答疑。上次处理失败于 {{ new Date(document.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }}：{{ document.error_message }}</p>
           <p v-else-if="document.error_message" class="document-error">{{ document.error_message }}</p>
@@ -151,8 +148,8 @@ function pointName(id: string | null) { return props.points.find(point => point.
           </details>
         </div>
         <div class="document-actions">
-          <RouterLink v-if="document.status === 'ready'" :to="{ path: '/chat', query: { document: document.id, point: document.knowledge_point_id || undefined } }">学习这份资料</RouterLink>
-          <RouterLink v-if="document.status === 'ready'" :to="{ path: '/practice', query: { document: document.id } }">依据资料练习</RouterLink>
+          <RouterLink v-if="document.status === 'ready'" :to="{ path: '/chat', query: { document: document.id, chapter: document.chapter_id || undefined } }">学习这份资料</RouterLink>
+          <RouterLink v-if="document.status === 'ready'" :to="{ path: '/practice', query: { document: document.id, chapter: document.chapter_id || undefined } }">依据资料练习</RouterLink>
           <a v-if="document.status !== 'deleted'" :href="documentFileUrl(document.id, false, management)" target="_blank" rel="noopener noreferrer">预览</a>
           <a v-if="document.status !== 'deleted'" :href="documentFileUrl(document.id, true, management)" target="_blank" rel="noopener noreferrer">下载</a>
           <button v-if="writable && document.retryable && document.status !== 'deleted'" class="text-button" type="button"

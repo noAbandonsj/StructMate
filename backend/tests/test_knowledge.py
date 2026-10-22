@@ -8,7 +8,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from capstone.core.settings import Settings
-from capstone.db.models import AuthSession, KnowledgeBase, KnowledgePoint, User
+from capstone.db.models import AuthSession, Chapter, KnowledgeBase, User
 from capstone.main import create_app
 from capstone.seed import seed_course_data
 
@@ -68,26 +68,25 @@ def test_two_accounts_can_only_read_their_own_library_and_public_course(clients)
 def test_catalog_and_library_pagination_are_complete_and_stable(clients) -> None:
     first, _second = clients
     register(first, "student")
-    points = first.get("/api/v1/knowledge-points").json()
-    assert points["total"] == 31 and len(points["items"]) == 31
-    roots = [item for item in points["items"] if item["parent_id"] is None]
+    points = first.get("/api/v1/chapters").json()
+    assert points["total"] == 8 and len(points["items"]) == 8
+    roots = points["items"]
     assert len(roots) == 8
     assert [item["code"] for item in roots] == [
+        "complexity",
         "linear-list",
         "stack-queue",
+        "strings-arrays",
         "tree",
         "graph",
         "search",
         "sort",
-        "hash",
-        "complexity",
     ]
-    ids = {item["id"] for item in points["items"]}
-    assert all(item["parent_id"] is None or item["parent_id"] in ids for item in points["items"])
+    assert all("parent_id" not in item for item in points["items"])
     paged = []
-    for page in range(1, 6):
-        response = first.get(f"/api/v1/knowledge-points?page={page}&page_size=7").json()
-        assert response["total"] == 31 and response["page"] == page
+    for page in range(1, 3):
+        response = first.get(f"/api/v1/chapters?page={page}&page_size=7").json()
+        assert response["total"] == 8 and response["page"] == page
         paged.extend(response["items"])
     assert paged == points["items"]
     first_library = first.get("/api/v1/knowledge-bases?page=1&page_size=1").json()
@@ -102,13 +101,13 @@ def test_catalog_and_library_pagination_are_complete_and_stable(clients) -> None
 def test_invalid_pagination_is_rejected(clients, query: str) -> None:
     first, _second = clients
     register(first, "student")
-    for path in ("knowledge-bases", "knowledge-points"):
+    for path in ("knowledge-bases", "chapters"):
         assert first.get(f"/api/v1/{path}?{query}").status_code == 422
 
 
 def test_all_knowledge_routes_require_login_and_logout_revokes_access(clients) -> None:
     first, _second = clients
-    paths = ("/knowledge-bases", f"/knowledge-bases/{uuid4()}", "/knowledge-points")
+    paths = ("/knowledge-bases", f"/knowledge-bases/{uuid4()}", "/chapters")
     for path in paths:
         assert first.get("/api/v1" + path).status_code == 401
     account = register(first, "student")
@@ -130,10 +129,10 @@ def test_read_routes_do_not_create_missing_course_data(migrated_database, tmp_pa
         with Session(migrated_database) as session:
             counts = {
                 model: session.scalar(select(func.count()).select_from(model))
-                for model in (User, AuthSession, KnowledgeBase, KnowledgePoint)
+                for model in (User, AuthSession, KnowledgeBase, Chapter)
             }
         assert client.get("/api/v1/knowledge-bases").json()["total"] == 1
-        assert client.get("/api/v1/knowledge-points").json()["items"] == []
+        assert client.get("/api/v1/chapters").json()["items"] == []
         with Session(migrated_database) as session:
             for model, count in counts.items():
                 assert session.scalar(select(func.count()).select_from(model)) == count

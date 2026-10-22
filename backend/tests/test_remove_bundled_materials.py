@@ -51,7 +51,6 @@ def test_import_commands_have_no_default_materials(migrated_database, tmp_path, 
 def test_upgrade_removes_only_bundled_materials_and_cleans_files(
     migrated_database, migration_config, tmp_path
 ):
-    command.downgrade(migration_config, "0009")
     course = seed_course_data(migrated_database)
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     store = BlobStore(settings.uploads_dir)
@@ -63,11 +62,11 @@ def test_upgrade_removes_only_bundled_materials_and_cleans_files(
             actor = session.scalar(select(User).where(User.username == "student"))
             actor.role = "admin"
             actor_id = actor.id
-            point = session.scalar(select(Resource.knowledge_point_id).limit(1))
+            point = session.scalar(select(Resource.chapter_id).limit(1))
             session.add(
                 Resource(
                     code="admin-resource",
-                    knowledge_point_id=point,
+                    chapter_id=point,
                     title="管理员维护的外链",
                     description="管理员登记",
                     url="https://example.org/admin",
@@ -121,6 +120,7 @@ def test_upgrade_removes_only_bundled_materials_and_cleans_files(
         storage_keys = [document.storage_key for document in bundled]
         chunk_count = session.scalar(select(func.count()).select_from(DocumentChunk))
         assert len(bundled_ids) == 3 and chunk_count > 0
+    command.downgrade(migration_config, "0009")
     command.upgrade(migration_config, "head")
     # Replaying the migration must not restore content or duplicate delete tasks.
     command.downgrade(migration_config, "0009")

@@ -1,7 +1,7 @@
 [
   {
     "code": "ods-array",
-    "knowledge_point_code": "linear-list",
+    "chapter_code": "linear-list",
     "title": "数组实现的线性表",
     "description": "了解顺序表的访问、插入、删除和扩容成本。",
     "url": "https://opendatastructures.org/ods-python/2_Array_Based_Lists.html",
@@ -13,7 +13,7 @@
   },
   {
     "code": "ods-linked",
-    "knowledge_point_code": "linear-list",
+    "chapter_code": "linear-list",
     "title": "链表与数组表的区别",
     "description": "比较链式结构与数组结构，先阅读章节概述。",
     "url": "https://opendatastructures.org/ods-python/3_Linked_Lists.html",
@@ -25,7 +25,7 @@
   },
   {
     "code": "ods-single",
-    "knowledge_point_code": "stack-queue",
+    "chapter_code": "stack-queue",
     "title": "用单链表实现栈与队列",
     "description": "阅读链式栈与 FIFO 队列的插入和删除过程。",
     "url": "https://opendatastructures.org/ods-python/3_1_SLList_Singly_Linked_Li.html",
@@ -37,7 +37,7 @@
   },
   {
     "code": "ods-array-queue",
-    "knowledge_point_code": "stack-queue",
+    "chapter_code": "stack-queue",
     "title": "数组队列与环绕索引",
     "description": "阅读队列操作、环绕数组和调整容量的实现。",
     "url": "https://opendatastructures.org/ods-python/2_3_ArrayQueue_Array_Based_.html",
@@ -49,7 +49,7 @@
   },
   {
     "code": "ods-tree",
-    "knowledge_point_code": "tree",
+    "chapter_code": "tree",
     "title": "二叉树的关系与高度",
     "description": "认识根、父子、叶、深度和高度。",
     "url": "https://opendatastructures.org/ods-python/6_Binary_Trees.html",
@@ -61,7 +61,7 @@
   },
   {
     "code": "ods-tree-algorithms",
-    "knowledge_point_code": "tree",
+    "chapter_code": "tree",
     "title": "二叉树遍历的实现",
     "description": "阅读父指针、递归与非递归遍历算法。",
     "url": "https://opendatastructures.org/ods-python/6_1_BinaryTree_Basic_Binary.html",

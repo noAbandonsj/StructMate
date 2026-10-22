@@ -17,11 +17,11 @@ export function useDocuments(library: Ref<LibraryInfo>, management = false) {
     actionError: string
     notice: string
     deletion: api.DocumentInfo | null
-    filters: { search: string; status: string }
+    filters: { search: string; status: string; chapterId: string }
   }>({
     documents: [], config: null, total: 0, page: 1, loading: false, busy: false,
     error: '', actionError: '', notice: '', deletion: null,
-    filters: { search: '', status: '' },
+    filters: { search: '', status: '', chapterId: '' },
   })
   let epoch = 0
   let readVersion = 0
@@ -114,16 +114,16 @@ export function useDocuments(library: Ref<LibraryInfo>, management = false) {
     }
   }
 
-  async function upload(file: File, pointId: string, attribution?: api.Attribution) {
+  async function upload(file: File, chapterId: string, attribution?: api.Attribution) {
     const libraryId = library.value.id
     const userId = authState.account?.user.id
     const startedAt = epoch
-    const result = await mutate((csrf, signal) => api.uploadDocument(libraryId, file, pointId, csrf, signal, management, attribution))
+    const result = await mutate((csrf, signal) => api.uploadDocument(libraryId, file, chapterId, csrf, signal, management, attribution))
     if (!valid(startedAt, userId, libraryId)) return false
     if (result) {
       state.notice = result.duplicate ? '同内容资料已存在，可以查看已有文件。' : '文件已保存，请查看处理状态；就绪后可用于学习。'
       state.page = 1
-      if (management) state.filters = { search: '', status: '' }
+      if (management) state.filters = { ...state.filters, search: '', status: '' }
       await reload(false)
       return true
     }
@@ -176,8 +176,8 @@ export function useDocuments(library: Ref<LibraryInfo>, management = false) {
     if (authState.account) void reload()
   }, { immediate: true })
   onScopeDispose(() => { disposed = true; reset() })
-  async function setFilters(search: string, status: string) {
-    state.filters = { search: search.trim(), status }
+  async function setFilters(search: string, status: string, chapterId = state.filters.chapterId) {
+    state.filters = { search: search.trim(), status, chapterId }
     state.page = 1
     await reload()
   }
