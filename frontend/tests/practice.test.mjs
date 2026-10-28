@@ -256,6 +256,83 @@ test('finishing generation cannot leave ready metadata paired with an earlier em
   } finally { view.effect.stop() }
 })
 
+test('generation polling stays quiet and only refreshes questions and history when finished', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const requests = [], pending = [], loading = []
+  let initial = true
+  globalThis.fetch = url => {
+    requests.push(url)
+    if (url.endsWith('/practice-sessions/one')) {
+      if (initial) { initial = false; return Promise.resolve(response({ ...session('one'), status: 'generating' })) }
+      return new Promise(resolve => pending.push(resolve))
+    }
+    return defaults(url)
+  }
+  const view = scope('quiet-poll-owner')
+  const stop = vue.watch(() => view.state.loading, value => loading.push(value), { flush: 'sync' })
+  try {
+    await until(() => view.state.ready && !view.state.loading)
+    const materials = view.state.materials, chapters = view.state.chapters
+    requests.length = 0; loading.length = 0
+    for (let poll = 0; poll < 2; poll++) {
+      t.mock.timers.tick(1500)
+      await until(() => pending.length === poll + 1)
+      assert.equal(view.state.loading, false, 'a pending status request must not switch the form into loading')
+      assert.equal(view.state.practice.status, 'generating')
+      pending[poll](response({ ...session('one'), status: 'generating' }))
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    assert.deepEqual(requests, Array(2).fill('/api/v1/practice-sessions/one'))
+    assert.equal(view.state.materials, materials)
+    assert.equal(view.state.chapters, chapters)
+    assert.deepEqual(loading, [])
+    t.mock.timers.tick(1500)
+    await until(() => pending.length === 3)
+    assert.equal(view.state.items.length, 0)
+    pending[2](response(session('one')))
+    await until(() => view.state.practice.status === 'ready')
+    assert.equal(view.state.items[0].id, 'question')
+    assert.ok(requests.some(url => url.endsWith('/items')))
+    assert.ok(requests.some(url => url.includes('/practice-sessions?')))
+    assert.deepEqual(loading, [])
+    const finishedCount = requests.length
+    t.mock.timers.tick(1500)
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(requests.length, finishedCount, 'terminal sessions must stop polling')
+  } finally { stop(); view.effect.stop() }
+})
+
+test('a polling error retains generation state and stays visible until a successful retry', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const pending = []
+  let initial = true
+  globalThis.fetch = url => {
+    if (url.endsWith('/practice-sessions/one')) {
+      if (initial) { initial = false; return Promise.resolve(response({ ...session('one'), status: 'generating' })) }
+      return new Promise((resolve, reject) => pending.push({ resolve, reject }))
+    }
+    return defaults(url)
+  }
+  const view = scope('poll-error-owner')
+  try {
+    await until(() => view.state.ready && !view.state.loading)
+    t.mock.timers.tick(1500)
+    await until(() => pending.length === 1)
+    pending[0].reject(new Error('offline'))
+    await until(() => view.state.readError)
+    const message = view.state.readError
+    t.mock.timers.tick(1500)
+    await until(() => pending.length === 2)
+    assert.equal(view.state.readError, message)
+    assert.equal(view.state.loading, false)
+    assert.equal(view.state.practice.status, 'generating')
+    pending[1].resolve(response({ ...session('one'), status: 'failed', error_message: '生成失败，请重试。' }))
+    await until(() => view.state.practice.status === 'failed')
+    assert.equal(view.state.readError, '')
+    assert.equal(view.state.loading, false)
+  } finally { view.effect.stop() }
+})
+
 test('failed refresh keeps existing practice data and exposes the read failure separately', async () => {
   globalThis.fetch = defaults
   const view = scope('refresh-failure-owner')

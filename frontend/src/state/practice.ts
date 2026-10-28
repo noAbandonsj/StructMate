@@ -37,32 +37,44 @@ export function usePractice(selected: Ref<string>) {
     saveDraft(user, selected.value, JSON.stringify(state.choices), 'practice')
     try { localStorage.setItem('capstone.practice.preferences.' + user, JSON.stringify({ ...state.form, generation_requirements: '', source_conversation_id: null })) } catch { /* Optional preferences. */ }
   }
-  async function reload() {
+  async function readContext(signal: AbortSignal) {
+    const [history, materials, config, chapters] = await Promise.all([
+      api.list(state.page, signal), api.materials(signal), api.config(signal), getChapters(signal),
+    ])
+    return { history, materials, config, chapters }
+  }
+  async function reload(background = false) {
     const version = epoch, user = authState.account?.user.id, id = selected.value, readStamp = ++readVersion
     const current = () => valid(version, user, id) && readStamp === readVersion
     if (!user || disposed) return
     reader.abort(); reader = new AbortController(); stopTimer()
     const signal = reader.signal
-    state.loading = true
-    state.readError = ''
+    if (!background) state.loading = true
     try {
-      const [history, materials, config, practice, chapters] = await Promise.all([
-        api.list(state.page, signal), api.materials(signal), api.config(signal),
-        id ? api.detail(id, signal) : Promise.resolve(null), getChapters(signal),
+      const [practice, context] = await Promise.all([
+        id ? api.detail(id, signal) : Promise.resolve(null),
+        background ? Promise.resolve(null) : readContext(signal),
       ])
       // Read items after terminal metadata: generation publishes them atomically.
       // Parallel reads could otherwise pair ready metadata with an earlier empty list.
-      const items = id && practice?.status !== 'generating' ? await api.items(id, signal) : null
+      const terminal = id && practice?.status !== 'generating'
+      const [items, history] = await Promise.all([
+        terminal ? api.items(id, signal) : Promise.resolve(null),
+        background && terminal ? api.list(state.page, signal) : Promise.resolve(null),
+      ])
       if (!current()) return
-      state.history = history.items; state.total = history.total; state.materials = materials
-      state.chapters = chapters
-      if (!state.form.chapter_id) {
-        const material = materials.find(item => state.form.document_ids.includes(item.id))
-        if (material?.chapter_id) state.form.chapter_id = material.chapter_id
+      if (context) {
+        state.history = context.history.items; state.total = context.history.total
+        state.materials = context.materials; state.chapters = context.chapters
+        state.generationAvailable = context.config.generation_available
+        if (!state.form.chapter_id) {
+          const material = context.materials.find(item => state.form.document_ids.includes(item.id))
+          if (material?.chapter_id) state.form.chapter_id = material.chapter_id
+        }
       }
-      state.generationAvailable = config.generation_available
+      if (history) { state.history = history.items; state.total = history.total }
       state.practice = practice; state.items = items?.items ?? []
-      state.ready = true
+      state.ready = true; state.readError = ''
       for (const item of state.items) {
         if (item.attempt || !item.is_valid || !isValidAnswer(item, state.choices[item.id])) delete state.choices[item.id]
       }
@@ -78,8 +90,8 @@ export function usePractice(selected: Ref<string>) {
     }
     finally {
       if (current()) {
-        state.loading = false
-        if (state.practice?.status === 'generating') timer = setTimeout(() => void reload(), 1500)
+        if (!background) state.loading = false
+        if (state.practice?.status === 'generating') timer = setTimeout(() => void reload(true), 1500)
       }
     }
   }
