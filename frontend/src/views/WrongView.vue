@@ -6,6 +6,9 @@ import MarkdownContent from '../components/MarkdownContent'
 const route = useRoute(), router = useRouter()
 const selected = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const { state, reload, review } = useWrong(selected)
+const allSelected = computed(() => state.items.length > 0 && state.items.every(item => state.checked.includes(item.id)))
+const partiallySelected = computed(() => state.checked.length > 0 && !allSelected.value)
+function toggleAll() { state.checked = allSelected.value ? [] : state.items.map(item => item.id) }
 async function start(ids: string[]) { const practice = await review(ids); if (practice) await router.push('/practice/' + practice.id) }
 </script>
 <template>
@@ -16,6 +19,7 @@ async function start(ids: string[]) { const practice = await review(ids); if (pr
     <div class="wrong-filters"><label>章节<select v-model="state.chapter" @change="state.page = 1; reload()"><option value="">全部章节</option><option v-for="chapter in state.chapters" :key="chapter.id" :value="chapter.id">{{ chapter.name }}</option></select></label><label>复习状态<select v-model="state.status" @change="state.page = 1; reload()"><option value="pending">待复习</option><option value="consolidated">已巩固</option><option value="">全部</option></select></label><label>搜索题目<input type="search" v-model="state.search" maxlength="500" placeholder="例如：循环队列" @change="state.page = 1; reload()"></label><button class="primary-button" :disabled="state.busy || !state.checked.length" @click="start(state.checked)">复习所选（{{ state.checked.length }}）</button></div>
     <div class="wrong-layout">
       <div>
+        <label class="wrong-select-all"><input type="checkbox" :checked="allSelected" :indeterminate="partiallySelected" :disabled="state.loading || state.busy || !state.items.length" @change="toggleAll">全选本页（{{ state.items.length }} 题）</label>
         <p v-if="state.loading && !state.items.length">正在读取错题…</p><p v-else-if="state.error && !state.items.length" class="notice">暂时无法读取错题，请刷新重试。</p><p v-else-if="!state.items.length" class="notice">当前筛选没有错题，可以去练习中心开始一组练习。</p>
         <article v-for="item in state.items" :key="item.id" class="wrong-card">
           <label><input type="checkbox" :value="item.id" v-model="state.checked">选择复习</label><RouterLink :to="'/wrong/' + item.id"><h2>{{ item.stem }}</h2></RouterLink>

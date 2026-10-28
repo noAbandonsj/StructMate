@@ -48,7 +48,7 @@ function scope(id = 'one', user = 'student') {
 }
 function defaultFetch(url) {
   if (url.endsWith('/summary')) return Promise.resolve(response({ status: 'empty', content: '', message_count: 0, cutoff_sequence: 0, cutoff_at: null, generated_at: null, has_newer_messages: false }))
-  if (url.includes('/config')) return Promise.resolve(response({ generation_available: true, embedding_available: true }))
+  if (url.includes('/config')) return Promise.resolve(response({ generation_available: true }))
   if (url.includes('/messages?')) return Promise.resolve(response(page([message('answer')])))
   if (url.includes('/conversations?')) return Promise.resolve(response(page([conversation('one')])))
   return Promise.resolve(response(conversation(url.split('/').at(-1))))
@@ -140,13 +140,16 @@ test('list actions update another conversation without replacing the current con
   } finally { view.effect.stop() }
 })
 
-test('a conversation with no ready materials keeps the draft and does not send', async () => {
+test('chat sends with only generation configured and no material readiness contract', async () => {
   let writes = 0, configUrl = ''
   globalThis.fetch = (url, options) => {
-    if (options?.method === 'POST') writes++
+    if (options?.method === 'POST') {
+      writes++
+      return Promise.resolve(response({ assistant_message_id: 'answer', user_message_id: 'question' }))
+    }
     if (url.includes('/config')) {
       configUrl = url
-      return Promise.resolve(response({ generation_available: true, embedding_available: true, ready_document_count: 0 }))
+      return Promise.resolve(response({ generation_available: true }))
     }
     if (url.includes('/messages?')) return Promise.resolve(response(page([])))
     return defaultFetch(url)
@@ -156,12 +159,13 @@ test('a conversation with no ready materials keeps the draft and does not send',
     await until(() => view.state.config && !view.state.loading)
     view.state.draft = '请解释栈'
     await view.send()
-    assert.ok(configUrl.includes('conversation_id=empty-course'))
-    assert.equal(writes, 0)
-    assert.equal(view.state.draft, '请解释栈')
-    assert.match(view.state.error, /资料范围没有可用于学习的资料/)
+    assert.equal(configUrl, '/api/v1/conversations/config')
+    assert.equal(writes, 1)
+    assert.equal(view.state.draft, '')
+    assert.equal(view.state.error, '')
   } finally { view.effect.stop() }
 })
+
 test('restored generating answers connect without submitting another question', async () => {
   let writes = 0
   globalThis.fetch = (url, options) => { if (options.method === 'POST') writes++; return defaultFetch(url) }

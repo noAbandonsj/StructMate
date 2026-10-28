@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     pdf_max_pages: int = Field(default=300, ge=1, le=1000)
     chunk_chars: int = Field(default=1200, ge=300, le=4000)
     retrieval_min_score: float = Field(default=0.25, ge=-1, le=1)
+    chat_retrieval_timeout_seconds: float = Field(default=3, gt=0, le=30, allow_inf_nan=False)
     generation_base_url: str | None = Field(default=None, repr=False)
     generation_model: str | None = None
     generation_api_key: SecretStr | None = Field(default=None, repr=False, exclude=True)

@@ -64,7 +64,7 @@ export function useChat(selected: Ref<string>) {
     state.loading = true; state.error = ''
     try {
       const [conversations, config, conversation, summary] = await Promise.all([
-        api.list(state.page, signal), api.config(signal, id),
+        api.list(state.page, signal), api.config(signal),
         id ? api.detail(id, signal) : Promise.resolve(null),
         id ? api.summary(id, signal) : Promise.resolve(null),
       ])
@@ -124,10 +124,6 @@ export function useChat(selected: Ref<string>) {
   async function send() {
     const content = state.draft.trim(), version = epoch, user = authState.account?.user.id, id = selected.value
     if (!content || !id || active.value || state.conversation?.archived) return
-    if (state.config?.ready_document_count === 0) {
-      state.error = '当前资料范围没有可用于学习的资料。请补充就绪资料，或前往练习中心使用实时 AI 出题。'
-      return
-    }
     if (!pending || pending.content !== content)
       pending = { content, key: crypto.randomUUID() }
     const request = pending

@@ -101,8 +101,7 @@ def report_markdown(report):
         f"- 范围内新增错题：{data['wrong_questions']['new_in_range']} 道",
         f"- 截止时当前待复习：{data['wrong_questions']['current_pending']} 道（不限日期范围）",
         f"- 提问：{data['learning']['asked_questions']} 次；"
-        f"有效答疑：{data['learning']['completed_answers']} 次；"
-        f"资料不足 {data['learning']['insufficient_materials']} 次",
+        f"有效答疑：{data['learning']['completed_answers']} 次",
         f"- 实际记录活跃天数：{data['learning']['active_days']} 天；未估算学习时长",
         "",
         "| 作答类别 | 次数 | 答对 | 正确率 |",

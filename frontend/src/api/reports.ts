@@ -12,7 +12,7 @@ export interface Stats {
   hinted_attempt_count: number
   question_types?: Record<'single_choice' | 'true_false', Measure>
   chapters: { chapter_id: string; name: string; attempts: Measure; independent: Measure; evidence: string }[]
-  learning: { asked_questions: number; completed_answers: number; insufficient_materials?: number; active_days: number; conversation_count: number }
+  learning: { asked_questions: number; completed_answers: number; active_days: number; conversation_count: number }
   wrong_questions: { new_in_range: number; current_pending: number }; basis: string
 }
 export interface Report {

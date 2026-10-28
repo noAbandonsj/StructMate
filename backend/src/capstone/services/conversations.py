@@ -14,7 +14,6 @@ from capstone.db.models import (
 )
 from capstone.db.session import write_transaction
 from capstone.services.chapters import require_chapter
-from capstone.services.learning_readiness import ready_document_count
 from capstone.services.retrieval import document_predicate
 
 
@@ -133,15 +132,7 @@ def queue_answer(session, identifier, user_id, data, available, retry_id=None):
             snapshot = {"scope": conversation.scope, "document_ids": conversation.document_ids}
             latest += 1
         if not available:
-            raise ApiError(
-                503, "MODELS_NOT_CONFIGURED", "生成模型或向量模型尚未接通，请配置后重试。"
-            )
-        if not ready_document_count(session, user_id, snapshot["scope"], snapshot["document_ids"]):
-            raise ApiError(
-                409,
-                "NO_READY_MATERIALS",
-                "当前资料范围没有可用于学习的资料。请补充就绪资料，或先做 AI 练习。",
-            )
+            raise ApiError(503, "GENERATION_NOT_CONFIGURED", "生成模型尚未接通，请配置后重试。")
         answer = Message(
             conversation_id=identifier,
             sequence=latest + 1,
@@ -174,7 +165,6 @@ def message_info(session, message):
         "content": message.content,
         "reply_to_message_id": message.reply_to_message_id,
         "status": message.status,
-        "answer_outcome": message.answer_outcome,
         "citations": citations,
         "error_code": message.error_code,
         "error_message": message.error_message,

@@ -270,6 +270,8 @@ def run_evaluation(
         "generation_model": settings.generation_model,
         "embedding_model": settings.embedding_model,
         "retrieval_min_score": settings.retrieval_min_score,
+        "chat_retrieval_timeout_seconds": settings.chat_retrieval_timeout_seconds,
+        "retrieval_policy": "optional",
         "dataset_sha256": sha256((CONTENT / "rag-evaluation.json").read_bytes()).hexdigest(),
         "corpus": corpus,
         "case_count": len(results),

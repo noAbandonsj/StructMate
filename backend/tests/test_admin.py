@@ -175,7 +175,8 @@ def test_course_upload_retrieval_processing_history_and_deletion(migrated_databa
             ]
             assert after["citations"][0]["text"] == answer["citations"][0]["text"]
             assert after["citations"][0]["source_deleted"] is True
-            assert send(student, student_headers, conversation, "after-delete").status_code == 409
+            assert send(student, student_headers, conversation, "after-delete").status_code == 202
+            assert wait_answer(student, conversation)["citations"] == []
             with Session(migrated_database) as session:
                 assert session.scalar(select(func.count()).select_from(DocumentTask)) == 3
                 assert session.scalar(select(func.count()).select_from(CourseMaintenance)) == 3

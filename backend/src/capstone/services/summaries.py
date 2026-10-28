@@ -18,7 +18,6 @@ def completed_pairs(session, conversation_id):
         if (
             row.role == "assistant"
             and row.status == "completed"
-            and row.answer_outcome != "insufficient_materials"
             and row.reply_to_message_id in users
         ):
             answers[row.reply_to_message_id] = row
@@ -56,9 +55,7 @@ def queue_summary(session, identifier, user_id, request_id, available):
             raise ApiError(503, "GENERATION_NOT_CONFIGURED", "生成模型尚未接通，暂不能总结会话。")
         snapshot = completed_pairs(session, identifier)
         if not snapshot:
-            raise ApiError(
-                409, "SUMMARY_EMPTY", "请先完成至少一轮有效答疑；资料不足的回复不参与总结。"
-            )
+            raise ApiError(409, "SUMMARY_EMPTY", "请先完成至少一轮答疑。")
         # Keep the last successful summary readable until its replacement succeeds.
         conversation.summary_data = {
             "status": "generating",
@@ -89,7 +86,6 @@ def summary_info(session, conversation):
                 Message.conversation_id == conversation.id,
                 Message.role == "assistant",
                 Message.status == "completed",
-                Message.answer_outcome.is_distinct_from("insufficient_materials"),
             )
         )
         or 0

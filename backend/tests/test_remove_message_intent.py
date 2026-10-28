@@ -89,6 +89,7 @@ def test_remove_modes_preserves_messages_and_request_keys(
         ]
         for row in before:
             row.pop("intent")
+            row.pop("answer_outcome")
             if row["request_id"] == "original":
                 row["request_hash"] = digest({"content": content})
         assert after == before

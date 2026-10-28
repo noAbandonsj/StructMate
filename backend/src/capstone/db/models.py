@@ -280,7 +280,6 @@ class Message(Base):
     request_hash: Mapped[str | None] = mapped_column(String(64))
     content: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(16), default="completed")
-    answer_outcome: Mapped[str | None] = mapped_column(String(24))
     citations: Mapped[list] = mapped_column(JSON, default=list)
     scope_snapshot: Mapped[dict | None] = mapped_column(JSON)
     error_code: Mapped[str | None] = mapped_column(String(64))
@@ -429,26 +428,3 @@ class LearningReport(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     generated_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
-
-
-class Resource(Base):
-    __tablename__ = "resources"
-    __table_args__ = (
-        CheckConstraint(
-            "difficulty IN ('basic', 'intermediate', 'advanced')", name="ck_resources_difficulty"
-        ),
-        CheckConstraint("url LIKE 'https://%' OR url LIKE 'http://%'", name="ck_resources_url"),
-    )
-    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    code: Mapped[str] = mapped_column(String(80), unique=True)
-    chapter_id: Mapped[UUID] = mapped_column(
-        ForeignKey("chapters.id", ondelete="RESTRICT"), index=True
-    )
-    title: Mapped[str] = mapped_column(String(240))
-    description: Mapped[str] = mapped_column(Text)
-    url: Mapped[str] = mapped_column(Text)
-    difficulty: Mapped[str] = mapped_column(String(16))
-    language: Mapped[str] = mapped_column(String(40))
-    source_info: Mapped[dict] = mapped_column(JSON)
-    is_active: Mapped[bool] = mapped_column(default=True)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, onupdate=utc_now)

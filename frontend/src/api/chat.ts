@@ -17,11 +17,9 @@ export interface Message {
   content: string; status: 'generating' | 'completed' | 'failed' | 'cancelled'
   reply_to_message_id: string | null; citations: Citation[]
   error_code: string | null; error_message: string | null
-  answer_outcome: 'answered' | 'insufficient_materials' | null
 }
 export interface Config {
-  generation_available: boolean; embedding_available: boolean
-  course_ready_count: number; personal_ready_count: number; ready_document_count: number
+  generation_available: boolean
 }
 export interface Summary {
   client_request_id?: string | null
@@ -41,8 +39,7 @@ export interface Queued { assistant_message_id: string; user_message_id: string;
 const json = (csrf: string, value: unknown, method = 'POST') => ({
   method, headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(value),
 })
-export const config = (signal: AbortSignal, conversationId = '') => request<Config>(
-  '/conversations/config' + (conversationId ? '?conversation_id=' + encodeURIComponent(conversationId) : ''), { signal })
+export const config = (signal: AbortSignal) => request<Config>('/conversations/config', { signal })
 export const list = (page: number, signal: AbortSignal) =>
   request<Page<Conversation>>('/conversations?page=' + page, { signal })
 export const detail = (id: string, signal: AbortSignal) => request<Conversation>('/conversations/' + encodeURIComponent(id), { signal })

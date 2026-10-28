@@ -15,7 +15,6 @@ from capstone.core.auth import (
     require_origin,
 )
 from capstone.db.models import Conversation, LearningReport, PracticeSession
-from capstone.services.learning_readiness import learning_readiness
 from capstone.services.learning_stats import learning_stats
 from capstone.services.practice_serialization import practice_info
 from capstone.services.reports import create_report, get_report, report_info, report_markdown
@@ -54,12 +53,7 @@ def overview(current: AuthenticatedSession, session: DatabaseSession, request: R
     ).all()
     return {
         "stats": learning_stats(session, current.user_id),
-        "readiness": learning_readiness(
-            session,
-            current.user_id,
-            request.app.state.generation_service.available,
-            request.app.state.embedding_service.available,
-        ),
+        "readiness": {"generation_available": request.app.state.generation_service.available},
         "recent_conversations": [
             {"id": item.id, "title": item.title, "updated_at": item.updated_at}
             for item in conversations

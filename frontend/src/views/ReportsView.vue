@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import LearningStats from '../components/LearningStats.vue'
-import RecommendationPanel from '../components/RecommendationPanel.vue'
 import MarkdownContent from '../components/MarkdownContent'
 import { recentDateRange } from '../learning-options'
 import { useReports } from '../state/reports'
@@ -41,6 +40,5 @@ async function save() { const report = await generate(); if (report) { if (selec
         <p v-else class="field-help">{{ state.loading ? "正在读取报告…" : state.readError ? "暂时无法读取报告，请重试。" : "选择一份历史报告查看，或按上方日期范围保存新报告。" }}</p>
       </article>
     </div>
-    <RecommendationPanel />
   </section>
 </template>

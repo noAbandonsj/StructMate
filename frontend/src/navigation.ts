@@ -4,7 +4,7 @@ export const navigation = [
   { path: '/chat', name: 'chat', title: '学习对话', description: '用自然语言提问，结合真实资料理解数据结构。' },
   { path: '/practice', name: 'practice', title: '练习中心', description: '选择章节，由实时 AI 生成练习。' },
   { path: '/wrong', name: 'wrong', title: '错题本', description: '保留错误与复习记录，逐步巩固知识。' },
-  { path: '/reports', name: 'reports', title: '学习报告', description: '查看学习统计、总结和推荐资料。' },
+  { path: '/reports', name: 'reports', title: '学习报告', description: '查看学习统计和历史报告。' },
 ] as const
 
 export function safeReturnPath(value: unknown): string {

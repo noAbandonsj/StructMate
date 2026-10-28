@@ -14,7 +14,6 @@ from capstone.api.documents import router as documents_router
 from capstone.api.health import router as health_router
 from capstone.api.knowledge import router as knowledge_router
 from capstone.api.practice import router as practice_router
-from capstone.api.recommendations import router as recommendations_router
 from capstone.api.reports import router as reports_router
 from capstone.api.summaries import router as summaries_router
 from capstone.core.errors import install_error_handlers
@@ -159,7 +158,6 @@ def create_app(
     app.include_router(practice_router, prefix="/api/v1")
     app.include_router(summaries_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
-    app.include_router(recommendations_router, prefix="/api/v1")
     if configuration.serve_frontend:
         install_frontend(app)
     return app
