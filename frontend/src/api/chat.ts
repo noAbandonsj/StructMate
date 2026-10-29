@@ -11,6 +11,7 @@ export interface Citation {
   number: number; document_id: string; chunk_id: string; filename: string
   page_number: number | null; heading: string | null; line_start: number | null
   line_end: number | null; text: string; source_deleted: boolean; chapter_id: string | null
+  evidence_quotes?: string[]
 }
 export interface Message {
   id: string; conversation_id: string; sequence: number; role: 'user' | 'assistant'

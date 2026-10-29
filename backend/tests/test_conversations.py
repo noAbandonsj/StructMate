@@ -1,3 +1,5 @@
+import json
+import re
 import time
 from threading import Event
 from uuid import UUID, uuid4
@@ -14,6 +16,7 @@ from capstone.db.session import write_transaction
 from capstone.import_course import import_course_data
 from capstone.main import create_app
 from capstone.seed import seed_course_data
+from capstone.services.citation_grounding import evidence_body
 
 
 class TestGeneration:
@@ -25,7 +28,26 @@ class TestGeneration:
 
     def stream(self, messages, cancelled):
         self.prompts.append(messages)
-        yield "按资料，栈后进先出 [资料1]。"
+        yield "按资料，栈后进先出。"
+        match = re.search(
+            r"\[资料(\d+)\].*?原文：\n(.*?)\n\[/资料\1\]",
+            messages[0]["content"],
+            re.DOTALL,
+        )
+        if match:
+            quote = next(
+                (
+                    line.strip()[:100]
+                    for line in evidence_body(match[2]).splitlines()
+                    if len(line.strip()) >= 8
+                ),
+                "",
+            )
+            yield (
+                "<citation>"
+                + json.dumps({"number": int(match[1]), "quote": quote}, ensure_ascii=False)
+                + "</citation>"
+            )
         yield "不存在的编号 [资料999] 应被移除，数组 a[0] 保留。"
 
 

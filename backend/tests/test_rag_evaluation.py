@@ -6,22 +6,12 @@ import sys
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from test_conversations import TestGeneration as RecordedGeneration
 from test_documents import TestEmbedding
 
 from capstone.core.settings import Settings
 from capstone.db.models import User
 from capstone.evaluate_rag import EvaluationUnavailable, load_cases, location_checks, run_evaluation
-
-
-class RecordedGeneration:
-    available = True
-
-    def __init__(self):
-        self.prompts = []
-
-    def stream(self, messages, cancelled):
-        self.prompts.append(messages)
-        yield "用于测试管线的回答 [资料1]"
 
 
 def test_fixed_evaluation_splits_keep_holdout_out_of_default_run():

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from capstone.core.errors import ApiError
 from capstone.core.knowledge import readable_bases
 from capstone.db.models import Document, DocumentChunk, KnowledgeBase
+from capstone.services.citation_grounding import has_evidence
 
 
 def document_predicate(user_id: UUID, scope: str, document_ids: list[str]):
@@ -80,7 +81,7 @@ def retrieve(factory, embedding, vectors, settings, user_id, scope, document_ids
     hits = vectors.search(
         batch, [(row.id, row.index_revision) for row in documents], settings.retrieval_min_score
     )
-    result = []
+    result, seen = [], set()
     # A deletion/reprocess may race the external query. Check current SQL facts again.
     with factory() as session:
         for hit in hits:
@@ -106,7 +107,12 @@ def retrieve(factory, embedding, vectors, settings, user_id, scope, document_ids
             if (
                 payload.get("document_id") != str(document.id)
                 or payload.get("index_revision") != document.index_revision
+                or chunk.id in seen
+                or not has_evidence(chunk.text)
             ):
                 continue
+            seen.add(chunk.id)
             result.append(citation_info(chunk, document, len(result) + 1))
+            if len(result) == 6:
+                break
     return result

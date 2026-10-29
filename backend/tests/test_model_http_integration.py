@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import socket
 import time
 from threading import Event, Thread
@@ -24,6 +25,7 @@ from capstone.core.model_http import DeepSeekGeneration
 from capstone.core.settings import Settings
 from capstone.db.models import Chapter
 from capstone.main import create_app
+from capstone.services.citation_grounding import evidence_body
 
 
 @pytest.fixture
@@ -76,7 +78,23 @@ def local_provider():
                 ensure_ascii=False,
             )
         else:
-            text = "协议测试的正文，保留原文引用 [资料1]。"
+            text = "协议测试的正文。"
+            match = re.search(
+                r"\[资料1\].*?原文：\n(.*?)\n\[/资料1\]",
+                payload["messages"][0]["content"],
+                re.DOTALL,
+            )
+            if match:
+                quote = next(
+                    line.strip()[:100]
+                    for line in evidence_body(match[1]).splitlines()
+                    if len(line.strip()) >= 8
+                )
+                text += (
+                    "<citation>"
+                    + json.dumps({"number": 1, "quote": quote}, ensure_ascii=False)
+                    + "</citation>"
+                )
 
         async def stream():
             yield frame(text[:4])

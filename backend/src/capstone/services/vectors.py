@@ -129,7 +129,8 @@ class VectorIndex:
                     ],
                     should=pairs,
                 ),
-                limit=6,
+                # Overfetch so headings/provenance cannot displace useful evidence.
+                limit=24,
                 with_payload=True,
                 score_threshold=minimum,
             ).points

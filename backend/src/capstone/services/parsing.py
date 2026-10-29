@@ -26,7 +26,12 @@ def text_fragments(text: str, *, markdown: bool, page: int | None = None) -> lis
     fence: str | None = None
 
     def flush(end: int) -> None:
-        if block and "\n".join(block).strip():
+        while block and not block[-1].strip():
+            block.pop()
+            end -= 1
+        if block and any(
+            line.strip() and not (markdown and re.match(r"^#{1,6}\s+", line)) for line in block
+        ):
             result.append(
                 Fragment(
                     "\n".join(block).strip(),
@@ -62,7 +67,15 @@ def text_fragments(text: str, *, markdown: bool, page: int | None = None) -> lis
             elif marker == fence:
                 fence = None
         if not line.strip() and fence is None:
-            flush(index - 1)
+            if (
+                markdown
+                and block
+                and all(not value.strip() or re.match(r"^#{1,6}\s+", value) for value in block)
+            ):
+                # A heading and the following paragraph form one evidence unit.
+                block.append(line)
+            else:
+                flush(index - 1)
         else:
             block.append(line)
     flush(len(lines))
@@ -113,8 +126,29 @@ def decode_text(raw: bytes) -> str:
 
 
 def split_fragments(fragments: list[Fragment], maximum: int) -> list[Fragment]:
-    result: list[Fragment] = []
+    merged: list[Fragment] = []
     for fragment in fragments:
+        previous = merged[-1] if merged else None
+        separator = "\n\n"
+        if previous and previous.line_end is not None and fragment.line_start is not None:
+            separator = "\n" * max(1, fragment.line_start - previous.line_end)
+        if (
+            previous
+            and previous.heading == fragment.heading
+            and previous.page_number == fragment.page_number
+            and len(previous.text) + len(separator) + len(fragment.text) <= maximum
+        ):
+            merged[-1] = Fragment(
+                previous.text + separator + fragment.text,
+                previous.page_number,
+                previous.heading,
+                previous.line_start,
+                fragment.line_end,
+            )
+        else:
+            merged.append(fragment)
+    result: list[Fragment] = []
+    for fragment in merged:
         # Keep paragraphs, code and formulas together when reasonably sized.
         if len(fragment.text) <= maximum * 2:
             result.append(fragment)

@@ -121,6 +121,7 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
         <p class="field-help">{{ citation.heading }}{{ citation.page_number ? ' · 第 ' + citation.page_number + ' 页' : '' }}{{ citation.line_start ? ' · 第 ' + citation.line_start + '–' + citation.line_end + ' 行' : '' }}</p>
         <p v-if="citation.source_deleted" class="notice">来源已删除，以下是本次回答保留的历史片段。</p>
         <p v-if="citationError" class="form-error">{{ citationError }}</p>
+        <template v-if="citation.evidence_quotes?.length"><p class="field-help">本次引用摘录</p><blockquote v-for="quote in citation.evidence_quotes" :key="quote">{{ quote }}</blockquote><p class="field-help">所在原文片段</p></template>
         <pre>{{ citation.text }}</pre>
         <a v-if="!citation.source_deleted && !citationError" :href="documentFileUrl(citation.document_id)" target="_blank" rel="noopener">查看原文件</a>
       </aside>

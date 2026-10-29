@@ -165,6 +165,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .chat-composer textarea { width: 100%; resize: vertical; padding: 12px; font: inherit; border: 1px solid var(--chat-border); border-radius: 10px; box-sizing: border-box; }
 .composer-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .citation-pane pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; }
+.citation-pane blockquote { margin: 10px 0 18px; padding: 10px 14px; border-left: 3px solid #a4b8a5; border-radius: 0 8px 8px 0; background: #f0f5ef; line-height: 1.8; overflow-wrap: anywhere; }
 .practice-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 20px; align-items: start; }
 .practice-settings, .practice-main, .wrong-detail { background: white; border: 1px solid #dce5e5; border-radius: 16px; padding: 22px; min-width: 0; }
 .practice-settings fieldset { display: grid; gap: 14px; border: 0; padding: 0; min-width: 0; }
