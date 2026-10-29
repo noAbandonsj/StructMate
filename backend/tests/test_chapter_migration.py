@@ -80,6 +80,8 @@ def test_cleanup_removes_old_history_and_schema_but_preserves_accounts_and_files
                     row["feedback"] = None
                 if name == "messages":
                     row["intent"] = "explain"
+                if name == "attempts" and row["category"] == "first":
+                    row["category"] = "first_hinted" if row["hinted"] else "first_independent"
             if rows:
                 table = Table(name, metadata, autoload_with=connection)
                 # Values read through sqlite text are already serialized.

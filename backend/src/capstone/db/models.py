@@ -362,7 +362,7 @@ class Attempt(Base):
     __table_args__ = (
         UniqueConstraint("practice_item_id", name="uq_attempts_item"),
         CheckConstraint(
-            "category IN ('first_independent', 'first_hinted', 'repeat', 'review')",
+            "category IN ('first', 'repeat', 'review')",
             name="ck_attempts_category",
         ),
     )

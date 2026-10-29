@@ -3,7 +3,7 @@ import type { Page } from './client'
 import type { Practice } from './practice'
 import type { Config } from './chat'
 
-export type Category = 'first_independent' | 'first_hinted' | 'repeat' | 'review'
+export type Category = 'first' | 'repeat' | 'review'
 export interface Measure { count: number; correct_count: number; accuracy: number | null }
 export interface Stats {
   schema_version?: number
@@ -11,7 +11,7 @@ export interface Stats {
   attempts: Measure; categories: Record<Category, Measure>
   hinted_attempt_count: number
   question_types?: Record<'single_choice' | 'true_false', Measure>
-  chapters: { chapter_id: string; name: string; attempts: Measure; independent: Measure; evidence: string }[]
+  chapters: { chapter_id: string; name: string; attempts: Measure; first: Measure; evidence: 'insufficient' | 'sufficient' }[]
   learning: { asked_questions: number; completed_answers: number; active_days: number; conversation_count: number }
   wrong_questions: { new_in_range: number; current_pending: number }; basis: string
 }

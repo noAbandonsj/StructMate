@@ -15,7 +15,13 @@ from capstone.db.models import (
 from capstone.services.chapters import chapters as list_chapters
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
-CATEGORIES = ("first_independent", "first_hinted", "repeat", "review")
+CATEGORIES = ("first", "repeat", "review")
+STATISTICS_BASIS = (
+    "仅包含服务端已提交的有效作答，AI 练习按保存的参考答案计分。"
+    "首次作答统一统计，包含使用提示的首次作答；重复练习和错题复习单独统计。"
+    "提示使用情况另行记录，不估算学习时长。"
+    "有效答疑按已完成的 AI 回答统计，包含通用讲解和结合资料的回答；不代表已掌握。"
+)
 
 
 def date_range(from_date=None, to_date=None, now=None):
@@ -97,21 +103,21 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
     chapters = []
     for point in points:
         related = [row[0] for row in rows if row[1] == point.id]
-        independent = [attempt for attempt in related if attempt.category == "first_independent"]
+        first_attempts = [attempt for attempt in related if attempt.category == "first"]
         chapters.append(
             {
                 "chapter_id": str(point.id),
                 "name": point.name,
                 "attempts": measure(related),
-                "independent": measure(independent),
-                "evidence": "insufficient" if len(independent) < 5 else "sufficient",
+                "first": measure(first_attempts),
+                "evidence": "insufficient" if len(first_attempts) < 5 else "sufficient",
             }
         )
     active_days = {attempt.created_at.astimezone(SHANGHAI).date() for attempt in attempts}
     active_days.update(row.created_at.astimezone(SHANGHAI).date() for row in questions)
     active_days.update(row.updated_at.astimezone(SHANGHAI).date() for row in answers)
     return {
-        "schema_version": 5,
+        "schema_version": 6,
         "from_date": from_date.isoformat(),
         "to_date": to_date.isoformat(),
         "time_zone": "Asia/Shanghai",
@@ -139,7 +145,5 @@ def learning_stats(session, user_id, from_date=None, to_date=None, cutoff=None):
             ),
             "current_pending": sum(wrong.status == "pending" for wrong in wrongs),
         },
-        "basis": "仅包含服务端已提交的有效作答，AI 练习按保存的参考答案计分。"
-        "首次独立、提示、重复和复习分开；不估算学习时长。"
-        "有效答疑按已完成的 AI 回答统计，包含通用讲解和结合资料的回答；不代表已掌握。",
+        "basis": STATISTICS_BASIS,
     }

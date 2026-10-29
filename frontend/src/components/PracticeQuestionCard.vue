@@ -47,7 +47,7 @@ const emit = defineEmits<{
       <strong>{{ !item.attempt.is_valid ? '此结果已排除统计' : item.attempt.is_correct ? '回答正确' : '已加入错题本' }}</strong>
       <p>参考答案：{{ item.options.find(option => option.key === item.attempt!.reference_answer)?.text }}</p>
       <MarkdownContent :content="item.attempt.explanation" />
-      <p class="field-help">{{ item.attempt.category === 'first_independent' ? '首次独立作答' : item.attempt.category === 'first_hinted' ? '首次提示作答' : item.attempt.category === 'review' ? '错题复习' : '重复练习' }}{{ item.attempt.hinted ? ' · 使用了提示' : '' }}</p>
+      <p class="field-help">{{ item.attempt.category === 'first' ? '首次作答' : item.attempt.category === 'review' ? '错题复习' : '重复练习' }}{{ item.attempt.hinted ? ' · 使用了提示' : '' }}</p>
       <RouterLink v-if="item.attempt.wrong_question_id" :to="'/wrong/' + item.attempt.wrong_question_id">查看错题与历次作答</RouterLink>
       <details>
         <summary>依据与来源</summary>

@@ -52,7 +52,13 @@ def test_submit_all_publishes_results_together_and_retries_do_not_count_twice(
         assert result["practice"]["status"] == "completed"
         assert result["practice"]["submitted_count"] == 3
         assert result["practice"]["correct_count"] == 2
-        assert result["items"][1]["attempt"]["category"] == "first_hinted"
+        assert result["items"][1]["attempt"]["category"] == "first"
+        assert all(item["attempt"]["category"] == "first" for item in result["items"])
+        assert [item["attempt"]["hinted"] for item in result["items"]] == [False, True, False]
+        stats = client.get("/api/v1/learning/stats").json()
+        assert set(stats["categories"]) == {"first", "repeat", "review"}
+        assert stats["categories"]["first"] == {"count": 3, "correct_count": 2, "accuracy": 2 / 3}
+        assert stats["hinted_attempt_count"] == 1
         repeated = client.post(url, headers=headers, json=body)
         assert repeated.status_code == 201
         assert [item["attempt"]["id"] for item in repeated.json()["items"]] == [
@@ -153,7 +159,7 @@ def test_legacy_partial_answers_are_preserved_and_disabled_questions_are_exclude
                 answer=stored.snapshot["answer"],
                 is_correct=True,
                 hinted=False,
-                category="first_independent",
+                category="first",
             )
             session.add(attempt)
             session.flush()

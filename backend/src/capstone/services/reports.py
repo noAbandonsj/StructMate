@@ -76,14 +76,13 @@ def report_info(report):
 
 def report_markdown(report):
     data = report.snapshot
-    independent = data["categories"]["first_independent"]
+    first_attempts = data["categories"]["first"]
 
     def percent(value):
         return "未评估" if value is None else f"{value * 100:.1f}%"
 
     labels = {
-        "first_independent": "首次独立新题",
-        "first_hinted": "首次提示作答",
+        "first": "首次作答",
         "repeat": "重复练习",
         "review": "错题复习",
     }
@@ -97,7 +96,8 @@ def report_markdown(report):
         "## 真实统计快照",
         "",
         f"- 有效作答：{data['attempts']['count']} 次",
-        f"- 首次独立新题：{independent['count']} 道，正确率 {percent(independent['accuracy'])}",
+        f"- 首次作答：{first_attempts['count']} 道，正确率 {percent(first_attempts['accuracy'])}",
+        f"- 使用提示：{data['hinted_attempt_count']} 次",
         f"- 范围内新增错题：{data['wrong_questions']['new_in_range']} 道",
         f"- 截止时当前待复习：{data['wrong_questions']['current_pending']} 道（不限日期范围）",
         f"- 提问：{data['learning']['asked_questions']} 次；"
@@ -117,15 +117,15 @@ def report_markdown(report):
             "",
             "## 章节统计",
             "",
-            "| 章节 | 作答 | 独立新题 | 独立正确率 |",
+            "| 章节 | 作答 | 首次作答新题 | 首次正确率 |",
             "| --- | --- | --- | --- |",
         ]
     )
     for chapter in data["chapters"]:
+        first = chapter["first"]
         lines.append(
             f"| {chapter['name']} | {chapter['attempts']['count']} | "
-            f"{chapter['independent']['count']} | "
-            f"{percent(chapter['independent']['accuracy'])} |"
+            f"{first['count']} | {percent(first['accuracy'])} |"
         )
     lines.extend(
         [
@@ -137,7 +137,7 @@ def report_markdown(report):
             "## 统计口径",
             "",
             data["basis"],
-            "独立新题少于 5 道时证据不足。报告保留生成时快照，"
+            "首次作答的新题少于 5 道时证据不足。报告保留生成时快照，"
             "后续作答或题目停用不会改写本报告，可重新生成查看新口径。",
             "",
         ]

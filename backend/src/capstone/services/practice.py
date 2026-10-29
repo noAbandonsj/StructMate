@@ -167,15 +167,7 @@ def _record_answer(session, item, practice, user_id, answer, request_id):
         .where(Attempt.user_id == user_id, Attempt.question_id == item.question_id)
         .limit(1)
     )
-    category = (
-        "review"
-        if practice.mode == "review"
-        else "repeat"
-        if seen
-        else "first_hinted"
-        if item.hinted_at
-        else "first_independent"
-    )
+    category = "review" if practice.mode == "review" else "repeat" if seen else "first"
     now = utc_now()
     attempt = Attempt(
         user_id=user_id,

@@ -15,7 +15,7 @@ def performance(session, user_id, now=None):
         .join(Attempt, Attempt.question_id == Question.id)
         .where(
             Attempt.user_id == user_id,
-            Attempt.category == "first_independent",
+            Attempt.category == "first",
             Attempt.is_valid.is_(True),
             Question.is_valid.is_(True),
             Attempt.created_at >= cutoff,
@@ -37,9 +37,9 @@ def performance(session, user_id, now=None):
                 "correct_count": correct,
                 "accuracy": rate,
                 "status": status,
-                "reason": "独立新题少于 5 道，证据不足。"
+                "reason": "首次作答的新题少于 5 道，证据不足。"
                 if count < 5
-                else "最近 30 天独立新题正确率低于 60%，建议优先巩固。"
+                else "最近 30 天首次作答正确率低于 60%，建议优先巩固。"
                 if status == "priority"
                 else "样本足够，可继续拓展或巩固。",
             }

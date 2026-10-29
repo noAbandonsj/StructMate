@@ -43,7 +43,7 @@ def test_chat_without_documents_or_embedding_supports_followup_summary_and_repor
         )
         assert wait_summary(client, identifier)["message_count"] == 4
         stats = client.get("/api/v1/learning/stats").json()
-        assert stats["schema_version"] == 5
+        assert stats["schema_version"] == 6
         assert stats["learning"]["completed_answers"] == 2
         assert "insufficient_materials" not in stats["learning"]
         report = client.post(

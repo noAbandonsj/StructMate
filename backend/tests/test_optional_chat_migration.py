@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from test_conversations import new_conversation
 from test_documents import register
 
+from capstone.api.reports import ReportInput
 from capstone.core.settings import Settings
 from capstone.db.models import Message
 from capstone.main import create_app
@@ -50,9 +51,14 @@ def test_remove_outcome_deletes_obsolete_pairs_and_reports_without_compatibility
         legacy_stats["learning"] = {**legacy_stats["learning"], "insufficient_materials": 1}
         with monkeypatch.context() as patch:
             patch.setattr(reports, "learning_stats", lambda *args: legacy_stats)
-            obsolete = client.post(
-                "/api/v1/reports", headers=headers, json={"client_request_id": "legacy"}
-            ).json()
+            # Seed a retired snapshot through storage; current API responses
+            # deliberately expose only the current statistics contract.
+            user_id = UUID(client.get("/api/v1/auth/me").json()["user"]["id"])
+            with Session(migrated_database) as session:
+                old_report, _ = reports.create_report(
+                    session, user_id, ReportInput(client_request_id="legacy"), False
+                )
+                obsolete = {"id": str(old_report.id)}
     command.downgrade(migration_config, "0014")
     with migrated_database.begin() as connection:
         connection.execute(

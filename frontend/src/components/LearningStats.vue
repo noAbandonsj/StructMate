@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import type { Stats, Category } from '../api/reports'
 defineProps<{ stats: Stats }>()
-const categories: [Category, string][] = [['first_independent', '首次独立新题'], ['first_hinted', '首次提示作答'], ['repeat', '重复练习'], ['review', '错题复习']]
+const categories: [Category, string][] = [['first', '首次作答'], ['repeat', '重复练习'], ['review', '错题复习']]
 const percent = (value: number | null) => value === null ? '未评估' : (value * 100).toFixed(1) + '%'
 </script>
 <template>
   <p class="field-help">{{ stats.from_date }} 至 {{ stats.to_date }} · 上海日期，两端包含</p>
   <div class="stats-grid">
     <div><span>有效作答</span><strong>{{ stats.attempts.count }} 次</strong></div>
-    <div><span>首次独立正确率</span><strong>{{ percent(stats.categories.first_independent.accuracy) }}</strong><small>{{ stats.categories.first_independent.count }} 道不同新题</small></div>
+    <div><span>首次作答正确率</span><strong>{{ percent(stats.categories.first.accuracy) }}</strong><small>{{ stats.categories.first.count }} 道不同新题，包含使用提示的首次作答</small></div>
     <div><span>范围内新增错题</span><strong>{{ stats.wrong_questions.new_in_range }} 道</strong></div>
     <div><span>记录活跃天数</span><strong>{{ stats.learning.active_days }} 天</strong><small>不估算学习时长</small></div>
   </div>
@@ -17,5 +17,5 @@ const percent = (value: number | null) => value === null ? '未评估' : (value 
   <p class="field-help">使用提示共 {{ stats.hinted_attempt_count }} 次。</p>
   <p>范围内提问 {{ stats.learning.asked_questions }} 次，有效答疑 {{ stats.learning.completed_answers }} 次。截止时待复习 {{ stats.wrong_questions.current_pending }} 道（此项不限日期范围）。</p>
   <details v-if="stats.question_types"><summary>按题型查看</summary><p v-for="(item, kind) in stats.question_types" :key="kind">{{ kind === 'single_choice' ? '单选题' : '判断题' }}：{{ item.count }} 次作答，正确率 {{ percent(item.accuracy) }}</p></details>
-  <details open><summary>按章节查看</summary><table class="stats-table"><thead><tr><th scope="col">章节</th><th scope="col">作答</th><th scope="col">独立新题</th><th scope="col">正确率</th><th scope="col">证据</th></tr></thead><tbody><tr v-for="point in stats.chapters" :key="point.chapter_id"><th scope="row">{{ point.name }}</th><td>{{ point.attempts.count }}</td><td>{{ point.independent.count }}</td><td>{{ percent(point.independent.accuracy) }}</td><td>{{ point.evidence === 'insufficient' ? '证据不足（少于 5 道）' : '可供参考' }}</td></tr></tbody></table><p class="field-help">{{ stats.basis }}</p></details>
+  <details open><summary>按章节查看</summary><table class="stats-table"><thead><tr><th scope="col">章节</th><th scope="col">作答</th><th scope="col">首次作答新题</th><th scope="col">首次正确率</th><th scope="col">证据</th></tr></thead><tbody><tr v-for="point in stats.chapters" :key="point.chapter_id"><th scope="row">{{ point.name }}</th><td>{{ point.attempts.count }}</td><td>{{ point.first.count }}</td><td>{{ percent(point.first.accuracy) }}</td><td>{{ point.evidence === 'insufficient' ? '证据不足（少于 5 道）' : '可供参考' }}</td></tr></tbody></table><p class="field-help">{{ stats.basis }}</p></details>
 </template>

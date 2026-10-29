@@ -95,18 +95,17 @@ def test_statistics_shanghai_boundaries_categories_and_validity(practice_db, tmp
             for row, offset, category in zip(
                 rows,
                 [-1, 0, 10, 86399, 86400],
-                ["repeat", "first_independent", "first_hinted", "review", "repeat"],
+                ["repeat", "first", "first", "review", "repeat"],
                 strict=True,
             ):
                 row.created_at = start + timedelta(seconds=offset)
                 row.category = category
-                row.hinted = category == "first_hinted"
+                row.hinted = offset == 10
             invalid_question_id = rows[1].question_id
         path = "/api/v1/learning/stats?from_date=2020-01-02&to_date=2020-01-02"
         data = client.get(path).json()
         assert data["attempts"]["count"] == 3
-        assert data["categories"]["first_independent"]["accuracy"] == 0
-        assert data["categories"]["first_hinted"]["count"] == 1
+        assert data["categories"]["first"] == {"count": 2, "correct_count": 1, "accuracy": 0.5}
         assert data["categories"]["review"]["count"] == 1
         assert data["categories"]["repeat"]["accuracy"] is None
         assert data["hinted_attempt_count"] == 1 and data["learning"]["active_days"] == 1
@@ -117,7 +116,7 @@ def test_statistics_shanghai_boundaries_categories_and_validity(practice_db, tmp
             )
         data = client.get(path).json()
         assert data["attempts"]["count"] == 2
-        assert data["categories"]["first_independent"]["accuracy"] is None
+        assert data["categories"]["first"] == {"count": 1, "correct_count": 1, "accuracy": 1}
         first, last, begin, end = date_range(now=datetime(2026, 10, 15, 16, tzinfo=UTC))
         assert first == date(2026, 10, 10) and last == date(2026, 10, 16)
         assert end - begin == timedelta(days=7)
@@ -135,7 +134,7 @@ def test_report_frozen_before_generation_and_history_does_not_change(practice_db
             self.prompts.append(messages)
             self.started.set()
             assert self.release.wait(5)
-            yield "独立样本 1 道，证据不足；继续尝试不同新题。"
+            yield "首次作答新题 1 道，证据不足；继续尝试不同新题。"
 
     model = DelayedModel()
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)

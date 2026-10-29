@@ -206,7 +206,7 @@ def test_personal_practice_wrong_questions_and_origin_are_isolated(practice_db, 
             second.close()
 
 
-def test_hint_repeat_and_review_categories_do_not_inflate_independent_sample(practice_db, tmp_path):
+def test_hinted_first_counts_once_and_repeats_do_not_inflate_sample(practice_db, tmp_path):
     settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
     with Session(practice_db) as session:
         point = str(session.scalar(select(Chapter.id).where(Chapter.code == "linear-list")))
@@ -218,7 +218,7 @@ def test_hint_repeat_and_review_categories_do_not_inflate_independent_sample(pra
         assert client.post(hint_url, headers=headers).json()["hinted"]
         assert client.post(hint_url, headers=headers).status_code == 200
         result = submit(client, headers, item, answer_for(practice_db, item, False)).json()
-        assert result["category"] == "first_hinted" and result["hinted"]
+        assert result["category"] == "first" and result["hinted"]
         practice = create(client, headers, "repeat", count=1, chapter_ids=[point])
         item = items(client, practice["id"])[0]
         assert (
@@ -226,12 +226,13 @@ def test_hint_repeat_and_review_categories_do_not_inflate_independent_sample(pra
             == "repeat"
         )
         analysis = client.get("/api/v1/learning/performance").json()
-        assert all(
-            value["sample_count"] == 0
-            and value["accuracy"] is None
-            and value["status"] == "insufficient"
-            for value in analysis["items"]
-        )
+        chapter = next(value for value in analysis["items"] if value["chapter_id"] == point)
+        assert chapter["sample_count"] == 1 and chapter["accuracy"] == 0
+        assert chapter["status"] == "insufficient"
+        stats = client.get("/api/v1/learning/stats").json()
+        assert stats["categories"]["first"] == {"count": 1, "correct_count": 0, "accuracy": 0}
+        assert stats["categories"]["repeat"]["count"] == 1
+        assert stats["hinted_attempt_count"] == 1
 
 
 def test_wrong_review_distinct_shanghai_dates_and_reset(practice_db, tmp_path, monkeypatch):
@@ -606,6 +607,13 @@ def test_performance_threshold_and_repeat_exclusion(practice_db, tmp_path, corre
     with TestClient(create_app(settings)) as client:
         _, headers = register(client)
         practice = create(client, headers, count=5, chapter_ids=[root])
+        for item in items(client, practice["id"])[:2]:
+            assert (
+                client.post(
+                    f"/api/v1/practice-items/{item['id']}/hint", headers=headers
+                ).status_code
+                == 200
+            )
         assert (
             submit_group(
                 client, headers, practice_db, practice, lambda index: index < correct_count
@@ -628,7 +636,7 @@ def test_performance_threshold_and_repeat_exclusion(practice_db, tmp_path, corre
         )
         assert row["sample_count"] == 5 and row["correct_count"] == correct_count
         with Session(practice_db) as session, session.begin():
-            first = session.scalar(select(Attempt).where(Attempt.category == "first_independent"))
+            first = session.scalar(select(Attempt).where(Attempt.category == "first"))
             first.created_at -= timedelta(days=31)
         row = next(
             value

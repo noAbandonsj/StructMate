@@ -16,12 +16,20 @@ const citationError = ref('')
 const citationPane = ref<HTMLElement | null>(null)
 let citationTrigger: HTMLElement | null = null
 let citationVersion = 0
-watch(selected, () => { citationVersion++; citation.value = null; citationError.value = '' })
+const composingQuestion = ref(false)
+watch(selected, () => { citationVersion++; citation.value = null; citationError.value = ''; composingQuestion.value = false })
 const conversations = computed(() => {
   const current = state.conversation
   return current?.archived ? [current, ...state.conversations.filter(item => item.id !== current.id)] : state.conversations
 })
 const available = computed(() => state.config?.generation_available)
+const canSend = computed(() => !state.busy && !state.loading && !active.value && !!available.value && !!state.draft.trim() && !!state.conversation && !state.conversation.archived)
+function sendQuestion() { if (canSend.value) void send() }
+function onQuestionKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || event.isComposing || composingQuestion.value || event.keyCode === 229) return
+  event.preventDefault()
+  if (!event.repeat) sendQuestion()
+}
 const practiceRequirements = computed(() => ([...state.messages].reverse().find(message => message.role === 'user')?.content || state.conversation?.title || '').slice(0, 500))
 async function start() {
   const documents = typeof route.query.document === 'string' ? [route.query.document] : []
@@ -94,12 +102,13 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
             </article>
           </div>
           <p v-if="state.streamError" class="form-error" role="alert">{{ state.streamError }} <button @click="reconnect()" :disabled="!active">重新连接</button></p>
-          <form class="chat-composer" @submit.prevent="send">
+          <form class="chat-composer" @submit.prevent="sendQuestion">
             <label for="chat-question">学习问题</label>
-            <textarea id="chat-question" v-model="state.draft" maxlength="4000" rows="3" placeholder="输入问题，也可说明“给我提示”或“举例说明”…" :disabled="state.conversation.archived"></textarea>
+            <textarea id="chat-question" v-model="state.draft" maxlength="4000" rows="3" placeholder="输入问题，也可说明“给我提示”或“举例说明”…" aria-describedby="chat-shortcuts" :disabled="state.conversation.archived" @keydown="onQuestionKeydown" @compositionstart="composingQuestion = true" @compositionend="composingQuestion = false"></textarea>
+            <p id="chat-shortcuts" class="field-help">Enter 发送，Shift+Enter 换行。</p>
             <div class="composer-actions">
               <button v-if="active" type="button" @click="cancel()" :disabled="state.busy">取消回答</button>
-              <button v-else class="primary-button" :disabled="state.busy || state.loading || !available || !state.draft.trim() || state.conversation.archived">{{ state.busy ? '正在发送…' : '发送问题' }}</button>
+              <button v-else class="primary-button" :disabled="!canSend">{{ state.busy ? '正在发送…' : '发送问题' }}</button>
             </div>
             <p v-if="state.conversation.archived" class="field-help">会话已归档，恢复后可继续提问。</p>
           </form>
