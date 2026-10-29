@@ -62,14 +62,13 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
 </script>
 <template>
   <section class="chat-page">
-    <div class="section-heading"><h1>学习对话</h1><button class="text-button" @click="reload()" :disabled="state.loading">刷新</button></div>
+    <div class="section-heading"><h1>学习对话</h1></div>
     <p v-if="state.config && !available" class="notice">生成模型尚未接通。会话可以建立和保存，提问需在接通服务后使用。</p>
-    <p v-if="state.error" class="form-error" role="alert">{{ state.error }}</p>
+    <p v-if="state.error" class="form-error" role="alert">{{ state.error }} <button class="text-button" :disabled="state.loading" @click="reload()">重试读取</button></p>
     <div class="chat-layout" :class="{ 'with-citation': citation }">
       <aside class="conversation-list" aria-label="学习会话">
         <form @submit.prevent="start">
           <button class="primary-button" :disabled="state.busy">新建学习</button>
-          <p class="field-help">{{ route.query.document ? '自动参考从知识库选择的资料。' : '自动参考课程资料＋我的学习资料。' }}</p>
         </form>
         <p v-if="state.loading && !conversations.length">正在读取会话…</p>
         <p v-else-if="!conversations.length && !state.error" class="field-help">暂无进行中的会话。</p>
@@ -84,11 +83,9 @@ function openCitation(number: number, citations: Citation[]) { const value = cit
         <p v-if="!state.conversation" class="notice">{{ state.loading ? '正在读取…' : '选择已有会话，或新建学习后输入问题。' }}</p>
         <template v-else>
           <div class="section-heading"><h2>{{ state.conversation.title }}</h2></div>
-          <p v-if="state.conversation.document_ids.length" class="field-help">本次对话使用从知识库选择的资料。</p>
           <div class="message-history" :class="{ empty: !state.messages.length }" aria-label="会话记录">
             <RouterLink v-if="state.messages.length" :to="{ path: '/practice', query: { conversation: selected, chapter: state.conversation?.chapter_id || undefined, requirements: practiceRequirements || undefined } }">围绕本次对话练习</RouterLink>
             <button v-if="state.historyPage > 1" @click="older()" :disabled="state.loading">查看更早消息</button>
-            <p v-if="!state.messages.length" class="field-help">可以问：“栈和队列有什么区别？”或“用例子解释二叉树遍历”。</p>
             <article v-for="(message, index) in state.messages" :key="message.id" class="chat-message" :class="message.role">
               <strong>{{ message.role === 'user' ? '我' : '学习助手' }}</strong>
               <MarkdownContent v-if="message.role === 'assistant'" :content="message.content" :citations="message.citations.map(value => value.number)" @citation="openCitation($event, message.citations)" />

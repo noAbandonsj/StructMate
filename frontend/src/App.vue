@@ -1,38 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
-import { serviceState, checkService, markServiceUnavailable } from './state/connection'
 import AccountMenu from './components/AccountMenu.vue'
 import { navigation, safeReturnPath } from './navigation'
 import { authState, restoreAccount } from './state/auth'
 
 const route = useRoute()
 const router = useRouter()
-const connection = computed(() => serviceState.status)
-const connectionLabel = computed(() => ({
-  checking: '正在连接服务',
-  connected: '后端服务正常',
-  disconnected: '服务连接异常',
-})[connection.value])
-
-const checkConnection = () => { if (!document.hidden) void checkService() }
-let connectionTimer: ReturnType<typeof setInterval> | undefined
-onMounted(() => {
-  checkConnection()
-  connectionTimer = setInterval(checkConnection, 30000)
-  window.addEventListener('focus', checkConnection)
-  window.addEventListener('online', checkConnection)
-  window.addEventListener('offline', markServiceUnavailable)
-  document.addEventListener('visibilitychange', checkConnection)
-})
-onUnmounted(() => {
-  clearInterval(connectionTimer)
-  window.removeEventListener('focus', checkConnection)
-  window.removeEventListener('online', checkConnection)
-  window.removeEventListener('offline', markServiceUnavailable)
-  document.removeEventListener('visibilitychange', checkConnection)
-})
 const inSection = (path: string) => route.path === path || (path !== '/' && route.path.startsWith(path + '/'))
 
 watch(() => authState.account, (account) => {
@@ -99,16 +74,6 @@ async function retryAccount() {
       <header class="topbar">
         <span>学习空间 <span class="breadcrumb-separator">/</span> {{ route.meta.title }}</span>
         <div class="topbar-actions">
-          <div class="connection-status" role="status" aria-live="polite">
-            <span class="status-dot" :class="connection" aria-hidden="true"></span>
-            {{ connectionLabel }}
-            <button
-              v-if="connection === 'disconnected'"
-              class="text-button"
-              type="button"
-              @click="checkConnection"
-            >重试</button>
-          </div>
           <AccountMenu :key="authState.account.user.id" />
         </div>
       </header>

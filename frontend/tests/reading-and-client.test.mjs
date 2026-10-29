@@ -4,13 +4,12 @@ import { createServer } from 'vite'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 
-let server, markdown, connection, client, options, links
+let server, markdown, client, options, links
 const originalFetch = globalThis.fetch
 const response = (value, status = 200) => new Response(JSON.stringify(value), { status })
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' })
   markdown = await server.ssrLoadModule('/src/markdown.ts')
-  connection = await server.ssrLoadModule('/src/state/connection.ts')
   client = await server.ssrLoadModule('/src/api/client.ts')
   options = await server.ssrLoadModule('/src/learning-options.ts')
   links = await server.ssrLoadModule('/src/links.ts')
@@ -48,42 +47,19 @@ test('only known prose citations become buttons; code, links and unknown numbers
   assert.doesNotMatch(value, /<a[^>]*>[^<]*<button/)
 })
 
-test('network and server failures invalidate health immediately; a new health check recovers', async () => {
-  globalThis.fetch = async () => response({ status: 'ok' })
-  await connection.checkService()
-  assert.equal(connection.serviceState.status, 'connected')
+test('network and server failures retain actionable API errors', async () => {
   globalThis.fetch = async () => { throw new Error('offline') }
-  await assert.rejects(client.request('/learning/overview'))
-  assert.equal(connection.serviceState.status, 'disconnected')
-  globalThis.fetch = async () => response({ status: 'ok' })
-  await connection.checkService()
-  globalThis.fetch = async () => response({ message: '失败' }, 503)
-  await assert.rejects(client.request('/practice-sessions'))
-  assert.equal(connection.serviceState.status, 'disconnected')
-  globalThis.fetch = async () => response({ status: 'ok' })
-  await connection.checkService()
-  assert.equal(connection.serviceState.status, 'connected')
+  await assert.rejects(client.request('/learning/overview'), error => error instanceof client.ApiError && error.code === 'NETWORK_ERROR' && !!error.message)
+  globalThis.fetch = async () => response({ code: 'UNAVAILABLE', message: '请稍后重试' }, 503)
+  await assert.rejects(client.request('/practice-sessions'), error => error instanceof client.ApiError && error.status === 503 && error.code === 'UNAVAILABLE' && error.message === '请稍后重试')
 })
 
-test('validation errors and intentionally cancelled reads do not report a disconnected service', async () => {
-  globalThis.fetch = async () => response({ status: 'ok' })
-  await connection.checkService()
+test('validation errors and cancelled reads retain their API error contract', async () => {
   globalThis.fetch = async () => response({ message: '输入有误' }, 422)
-  await assert.rejects(client.request('/practice-sessions'))
+  await assert.rejects(client.request('/practice-sessions'), error => error.status === 422 && error.message === '输入有误')
   const controller = new AbortController(); controller.abort()
   globalThis.fetch = async () => { throw new Error('aborted') }
-  await assert.rejects(client.request('/practice-sessions', { signal: controller.signal }))
-  assert.equal(connection.serviceState.status, 'connected')
-})
-
-test('a stale successful probe cannot erase a newer business request failure', async () => {
-  let release
-  globalThis.fetch = () => new Promise(resolve => { release = resolve })
-  const pending = connection.checkService()
-  connection.markServiceUnavailable()
-  release(response({ status: 'ok' }))
-  await pending
-  assert.equal(connection.serviceState.status, 'disconnected')
+  await assert.rejects(client.request('/practice-sessions', { signal: controller.signal }), error => error instanceof client.ApiError && error.code === 'NETWORK_ERROR')
 })
 
 test('date shortcuts include both ends and follow Shanghai dates across month and year boundaries', () => {

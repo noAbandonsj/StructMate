@@ -36,7 +36,7 @@ async function logout() {
 
 <template>
   <details class="account-menu">
-    <summary>{{ authState.account?.user.display_name }} <span aria-hidden="true">⌄</span></summary>
+    <summary><span class="account-menu-name">{{ authState.account?.user.display_name }}</span></summary>
     <div class="account-panel">
       <p class="account-username">用户名：{{ authState.account?.user.username }}</p>
       <form @submit.prevent="saveName">

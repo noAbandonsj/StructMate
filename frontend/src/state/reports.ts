@@ -50,6 +50,11 @@ export function useReports(selected: Ref<string>) {
     } catch (error) { if (current() && !signal.aborted) await fail(error, true) }
     finally { if (current()) state.loading = false }
   }
+  async function applyRange() {
+    const { from_date, to_date } = state.range
+    if (!from_date || !to_date || from_date > to_date) return
+    await reload()
+  }
   async function generate() {
     const account = authState.account, version = epoch, id = selected.value
     if (!account || state.busy) return
@@ -85,5 +90,5 @@ export function useReports(selected: Ref<string>) {
     if (authState.account) void reload()
   })
   onScopeDispose(() => { disposed = true; epoch++; reader.abort(); writer.abort(); clearTimeout(timer); state.report = null; state.stats = null; state.reports = [] })
-  return { state, reload, generate }
+  return { state, reload, applyRange, generate }
 }

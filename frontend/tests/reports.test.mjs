@@ -105,6 +105,57 @@ test('typing while the initial statistics load is pending keeps the typed dates'
     assert.equal(view.state.range.from_date, '2026-04-01')
   } finally { view.effect.stop() }
 })
+test('committed custom dates update statistics while incomplete and reversed ranges stay editable', async () => {
+  const requested = []
+  globalThis.fetch = url => {
+    if (!url.includes('/learning/stats')) return defaults(url)
+    requested.push(url)
+    const query = new URL(url, 'http://localhost').searchParams
+    return Promise.resolve(response(stats(6, query.get('from_date') || '2026-10-09', query.get('to_date') || '2026-10-15')))
+  }
+  const view = scope('custom-range-owner')
+  try {
+    await until(() => view.state.stats && !view.state.loading)
+    const initial = requested.length
+    view.state.range = { from_date: '', to_date: '2026-04-20' }
+    await view.applyRange()
+    view.state.range = { from_date: '2026-04-21', to_date: '2026-04-20' }
+    await view.applyRange()
+    assert.equal(requested.length, initial)
+    view.state.range.from_date = '2026-04-01'
+    await view.applyRange()
+    assert.equal(requested.length, initial + 1)
+    assert.equal(view.state.stats.from_date, '2026-04-01')
+    assert.equal(view.state.stats.to_date, '2026-04-20')
+    assert.equal(view.state.stats.attempts.count, 6)
+  } finally { view.effect.stop() }
+})
+
+test('a later date selection wins when an older statistics response arrives last', async () => {
+  globalThis.fetch = defaults
+  const view = scope('latest-range-owner')
+  try {
+    await until(() => view.state.stats && !view.state.loading)
+    let release
+    globalThis.fetch = url => {
+      if (!url.includes('/learning/stats')) return defaults(url)
+      const query = new URL(url, 'http://localhost').searchParams
+      if (query.get('from_date') === '2026-04-01') return new Promise(resolve => { release = resolve })
+      return Promise.resolve(response(stats(9, query.get('from_date'), query.get('to_date'))))
+    }
+    view.state.range = { from_date: '2026-04-01', to_date: '2026-04-20' }
+    const first = view.applyRange()
+    await until(() => release)
+    view.state.range.from_date = '2026-04-10'
+    await view.applyRange()
+    release(response(stats(1, '2026-04-01', '2026-04-20')))
+    await first
+    assert.equal(view.state.stats.from_date, '2026-04-10')
+    assert.equal(view.state.stats.attempts.count, 9)
+    assert.equal(view.state.loading, false)
+  } finally { view.effect.stop() }
+})
+
 test('a saved request confirmed by a report read allows a deliberate new report request', async () => {
   let key, posts = 0
   globalThis.fetch = (url, options) => {

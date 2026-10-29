@@ -8,7 +8,7 @@ import { useReports } from '../state/reports'
 import { exportUrl } from '../api/reports'
 const route = useRoute(), router = useRouter()
 const selected = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
-const { state, reload, generate } = useReports(selected)
+const { state, reload, applyRange, generate } = useReports(selected)
 const time = (value: string) => new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
 const invalidRange = computed(() => !!state.range.from_date && !!state.range.to_date && state.range.from_date > state.range.to_date)
 const unappliedRange = computed(() => !!state.stats && (state.range.from_date !== state.stats.from_date || state.range.to_date !== state.stats.to_date))
@@ -18,17 +18,16 @@ async function save() { const report = await generate(); if (report) { if (selec
 </script>
 <template>
   <section>
-    <div class="section-heading"><h1>学习报告</h1><button :disabled="state.loading" @click="reload()">刷新</button></div>
-    <p class="intro-copy">先查看真实记录，再按需生成说明。历史报告保留当时的统计范围和数据。</p>
+    <div class="section-heading"><h1>学习报告</h1></div>
     <p v-if="state.readError" class="form-error" role="alert">{{ state.readError }} <button @click="reload()">重新读取</button></p>
     <article class="report-panel">
       <h2>实时统计</h2>
-      <div class="date-presets" role="group" aria-label="统计日期快捷选择"><button :aria-pressed="matchesDays(7)" :disabled="state.loading" @click="chooseDays(7)">近 7 天</button><button :aria-pressed="matchesDays(30)" :disabled="state.loading" @click="chooseDays(30)">近 30 天</button><span class="field-help">或在下方自定义日期（上海时间）</span></div>
-      <form class="report-range" @submit.prevent="reload()"><label>开始日期<input v-model="state.range.from_date" type="date" :max="state.range.to_date || undefined"></label><label>结束日期<input v-model="state.range.to_date" type="date" :min="state.range.from_date || undefined"></label><button :disabled="state.loading">查看统计</button></form>
+      <div class="date-presets" role="group" aria-label="统计日期快捷选择"><button :aria-pressed="matchesDays(7)" :disabled="state.loading" @click="chooseDays(7)">近 7 天</button><button :aria-pressed="matchesDays(30)" :disabled="state.loading" @click="chooseDays(30)">近 30 天</button></div>
+      <form class="report-range" @submit.prevent="applyRange()"><label>开始日期<input v-model="state.range.from_date" type="date" :max="state.range.to_date || undefined" @change="applyRange()"></label><label>结束日期<input v-model="state.range.to_date" type="date" :min="state.range.from_date || undefined" @change="applyRange()"></label></form>
       <p v-if="state.loading" role="status">正在读取…</p>
-      <LearningStats v-if="state.stats" :stats="state.stats" />
+      <LearningStats v-if="state.stats && !unappliedRange && !invalidRange" :stats="state.stats" />
       <p v-if="invalidRange" class="form-error" role="alert">开始日期不能晚于结束日期。</p>
-      <p v-else-if="unappliedRange" class="field-help" role="status">日期已更改，点击“查看统计”更新后再生成报告。</p>
+      <p v-else-if="!state.loading && (!state.range.from_date || !state.range.to_date)" class="field-help" role="status">请选择完整日期范围。</p>
       <p v-if="state.stats && !state.readError && !state.loading && !state.generationAvailable" class="notice">生成模型尚未接通，仍可保存和导出真实统计快照；文字报告暂不可用。</p>
       <p v-if="state.error" class="form-error" role="alert">{{ state.error }} 日期范围已保留，可重试。</p>
       <button class="primary-button" :disabled="state.busy || state.loading || !!state.readError || !state.stats || invalidRange || unappliedRange" @click="save()">{{ state.busy ? '正在保存…' : state.generationAvailable ? '按所选日期生成新报告' : '按所选日期保存统计快照' }}</button>

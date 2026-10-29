@@ -7,6 +7,7 @@ import type { LibraryInfo, Chapter } from '../api/knowledge'
 import { useDocuments } from '../state/documents'
 import { safeSourceLink } from '../links'
 import CourseDocumentDetails from './CourseDocumentDetails.vue'
+import DisclosurePanel from './DisclosurePanel.vue'
 
 const props = defineProps<{ library: LibraryInfo; chapters: Chapter[]; management?: boolean; chapterId?: string }>()
 const { state, reload, upload, process, remove, setPage, setFilters } = useDocuments(toRef(props, 'library'), props.management)
@@ -74,19 +75,16 @@ function chapterName(id: string | null) { return props.chapters.find(point => po
   <section class="document-panel" aria-labelledby="documents-title">
     <div class="section-heading">
       <h2 id="documents-title">{{ library.kind === 'course' ? '课程资料' : '我的资料' }}</h2>
-      <button class="text-button" type="button" :disabled="state.loading || state.busy" @click="reload()">刷新资料</button>
     </div>
-    <p v-if="library.is_readonly && !management" class="field-help">课程资料由管理员统一维护，学生可查看和下载。</p>
     <p v-if="state.config && !state.config.embedding_available" class="notice">
-      向量服务尚未接通。文件可以先保存和预览，配置后再处理；未就绪的资料暂不能用于学习对话。
+      资料处理暂不可用，仍可上传保存和预览。
     </p>
-    <component :is="management ? 'details' : 'div'" v-if="writable" class="course-upload">
-    <summary v-if="management">上传课程资料</summary>
+    <component :is="management ? DisclosurePanel : 'div'" v-if="writable" class="course-upload" :title="management ? '上传课程资料' : undefined">
     <form class="upload-form" @submit.prevent="submit">
       <fieldset :disabled="state.busy">
         <label for="document-file">上传学习资料</label>
         <input id="document-file" ref="fileInput" type="file" accept=".pdf,.txt,.md,.markdown" @change="chooseFile">
-        <p class="field-help">支持文本型 PDF、TXT、Markdown{{ state.config ? '，单文件最多 ' + state.config.max_mib + ' MiB' : '' }}；扫描或加密 PDF 暂不支持。</p>
+        <p class="field-help">文本 PDF / TXT / Markdown{{ state.config ? ' · 最大 ' + state.config.max_mib + ' MiB' : '' }}（不支持扫描或加密 PDF）</p>
         <div v-if="management" class="course-upload-fields">
           <label for="course-point">关联课程章节</label>
           <select id="course-point" v-model="chapterId" required>
@@ -98,13 +96,12 @@ function chapterName(id: string | null) { return props.chapters.find(point => po
           <label for="course-source">来源</label><input id="course-source" v-model="attribution.source" required maxlength="1000" placeholder="来源名称或链接，也可注明自编">
           <label for="course-license">许可说明</label><input id="course-license" v-model="attribution.license" required maxlength="1000" placeholder="例如：作者授权本课程学习使用">
         </div>
-        <details v-else class="upload-options">
-          <summary>关联章节（选填）</summary>
+        <DisclosurePanel v-else class="upload-options" title="关联章节" badge="选填">
           <select v-model="chapterId" aria-label="关联章节">
             <option value="">暂不指定</option>
             <option v-for="point in chapters" :key="point.id" :value="point.id">{{ point.name }}</option>
           </select>
-        </details>
+        </DisclosurePanel>
         <button class="primary-button" type="submit" :disabled="!file || !state.config">
           {{ state.busy ? '正在提交…' : state.config?.embedding_available ? '上传并处理' : '保存资料' }}
         </button>
@@ -119,7 +116,7 @@ function chapterName(id: string | null) { return props.chapters.find(point => po
       </select></label>
       <button class="text-button" type="submit" :disabled="state.busy || state.loading">搜索</button>
     </form>
-    <p v-if="localError || state.actionError || state.error" class="form-error" role="alert">{{ localError || state.actionError || state.error }}</p>
+    <p v-if="localError || state.actionError || state.error" class="form-error" role="alert">{{ localError || state.actionError || state.error }} <button v-if="state.error" class="text-button" type="button" :disabled="state.loading || state.busy" @click="reload()">重试</button></p>
     <p v-if="state.notice" class="field-help" role="status">{{ state.notice }}</p>
     <div v-if="state.deletion?.stage === 'cleanup_failed'" class="form-error" role="alert">
       {{ state.deletion.error_message }}
@@ -139,13 +136,12 @@ function chapterName(id: string | null) { return props.chapters.find(point => po
           <p v-if="library.is_readonly && !management && document.status === 'failed'" class="document-error">课程资料待维护者处理，暂不可用于答疑。上次处理失败于 {{ new Date(document.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }}：{{ document.error_message }}</p>
           <p v-else-if="document.error_message" class="document-error">{{ document.error_message }}</p>
           <p v-if="management && document.status === 'failed'" class="field-help">{{ document.retryable ? '请检查服务状态，恢复后重试处理。' : '请修正文件内容或格式后重新上传；索引不兼容时请联系本机维护者。' }}</p>
-          <details v-if="document.source_info?.sources?.length" class="source-notice">
-            <summary>来源与许可</summary>
+          <DisclosurePanel v-if="document.source_info?.sources?.length" class="source-notice" title="来源与许可">
             <p v-for="source in document.source_info.sources" :key="source.url" class="field-help">
               <a v-if="source.url" :href="safeSourceLink(source.url)" target="_blank" rel="noopener noreferrer">{{ source.title }}</a><span v-else>{{ source.title }}</span>
               · {{ source.author }} · {{ source.license }}
             </p>
-          </details>
+          </DisclosurePanel>
         </div>
         <div class="document-actions">
           <RouterLink v-if="document.status === 'ready'" :to="{ path: '/chat', query: { document: document.id, chapter: document.chapter_id || undefined } }">学习这份资料</RouterLink>

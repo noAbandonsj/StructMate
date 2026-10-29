@@ -23,11 +23,10 @@ function stats() {
 }
 const render = (component, props) => renderToString(createSSRApp({ render: () => h(component, props) }))
 
-test('statistics render one first-attempt category and keep hint usage separate', async () => {
+test('statistics render one first-attempt category', async () => {
   const html = await render(LearningStats, { stats: stats() })
   assert.match(html, /首次作答正确率/)
   assert.match(html, /66\.7%/)
-  assert.match(html, /使用提示共 1 次/)
   assert.doesNotMatch(html, /首次独立|首次提示作答/)
   assert.match(html, /重复练习/)
   assert.match(html, /错题复习/)

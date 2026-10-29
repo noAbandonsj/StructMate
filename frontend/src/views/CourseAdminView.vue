@@ -11,7 +11,6 @@ const course = computed(() => state.libraries.find(library => library.kind === '
 <template>
   <section v-if="authState.account?.user.role === 'admin'">
     <div class="page-heading"><p class="eyebrow">课程维护</p><h1>课程资料管理</h1>
-      <p>课程资料面向所有学习者。更新时先上传新文件，处理完成并核对后再移除旧文件。</p>
     </div>
     <p v-if="state.librariesError || state.chaptersError" class="form-error" role="alert">
       {{ state.librariesError || state.chaptersError }} <button class="text-button" @click="reload">重新加载</button>

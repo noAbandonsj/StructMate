@@ -40,14 +40,14 @@ async function load(next = 1) {
 </script>
 
 <template>
-  <div class="course-document-details">
-    <button class="text-button" type="button" :aria-expanded="open" @click="open ? open = false : load()">{{ open ? '收起详情' : '解析片段与维护记录' }}</button>
-    <div v-if="open">
+  <div class="course-document-details disclosure-panel">
+    <button class="disclosure-toggle" type="button" :aria-expanded="open" @click="open ? open = false : load()"><span class="disclosure-title">解析片段与维护记录</span></button>
+    <div v-if="open" class="disclosure-content">
       <p v-if="busy" role="status">正在读取…</p>
       <p v-if="error" class="form-error" role="alert">{{ error }} <button class="text-button" @click="load(page)">重试</button></p>
       <template v-if="!busy && !error">
         <h3>维护记录</h3>
-        <p v-if="!history.length" class="field-help">暂无网页维护记录。历史导入资料未补造操作者。</p>
+        <p v-if="!history.length" class="field-help">暂无维护记录。</p>
         <ul><li v-for="(event, index) in history" :key="index">{{ actions[event.action] }} · {{ event.actor }} · {{ new Date(event.created_at).toLocaleString('zh-CN') }}</li></ul>
         <h3>解析片段</h3>
         <p v-if="document.status !== 'ready'" class="field-help">资料尚未就绪或已删除，暂不提供当前解析片段。</p>

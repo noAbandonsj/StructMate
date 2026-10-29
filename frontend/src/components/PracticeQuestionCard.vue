@@ -2,6 +2,7 @@
 import { RouterLink } from 'vue-router'
 import type { Item } from '../api/practice'
 import MarkdownContent from './MarkdownContent'
+import DisclosurePanel from './DisclosurePanel.vue'
 
 defineProps<{ item: Item; choice?: string; busy: boolean }>()
 const emit = defineEmits<{
@@ -49,14 +50,13 @@ const emit = defineEmits<{
       <MarkdownContent :content="item.attempt.explanation" />
       <p class="field-help">{{ item.attempt.category === 'first' ? '首次作答' : item.attempt.category === 'review' ? '错题复习' : '重复练习' }}{{ item.attempt.hinted ? ' · 使用了提示' : '' }}</p>
       <RouterLink v-if="item.attempt.wrong_question_id" :to="'/wrong/' + item.attempt.wrong_question_id">查看错题与历次作答</RouterLink>
-      <details>
-        <summary>依据与来源</summary>
+      <DisclosurePanel title="依据与来源">
         <p v-for="(source, index) in item.attempt.source_info.citations" :key="index">
           {{ source.filename }}{{ source.source_deleted ? '（来源已删除，保留历史片段）' : '' }} {{ source.heading }} {{ source.page_number ? '第 ' + source.page_number + ' 页' : '' }}
           <span class="field-help">{{ source.text }}</span>
         </p>
-        <p v-if="!item.attempt.source_info.citations?.length" class="field-help">本题无资料引用，答案为生成时保存的 AI 参考答案。</p>
-      </details>
+        <p v-if="!item.attempt.source_info.citations?.length" class="field-help">暂无资料引用。</p>
+      </DisclosurePanel>
     </div>
   </article>
 </template>

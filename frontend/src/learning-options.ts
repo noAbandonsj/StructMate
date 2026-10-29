@@ -1,7 +1,7 @@
 export const difficultyOptions = [
-  { value: 'basic', label: '基础', help: '侧重概念理解与基本操作' },
-  { value: 'intermediate', label: '进阶', help: '侧重应用、推演与复杂度分析' },
-  { value: 'advanced', label: '挑战', help: '侧重综合分析与条件辨析' },
+  { value: 'basic', label: '基础' },
+  { value: 'intermediate', label: '进阶' },
+  { value: 'advanced', label: '挑战' },
 ] as const
 
 export function recentDateRange(days: 7 | 30, now = new Date()) {
