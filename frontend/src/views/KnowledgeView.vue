@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 
 import { useKnowledge } from '../state/knowledge'
 import DocumentPanel from '../components/DocumentPanel.vue'
 
 const { state, reload, selectLibrary } = useKnowledge()
-const search = ref('')
 const selectedChapter = ref('')
-const chapters = computed(() => state.chapters.filter(chapter => chapter.name.includes(search.value.trim())))
 </script>
 
 <template>
@@ -50,9 +48,8 @@ const chapters = computed(() => state.chapters.filter(chapter => chapter.name.in
       <p v-if="state.chaptersStatus === 'loading'" role="status">正在读取章节…</p>
       <p v-else-if="state.chaptersStatus === 'error'" class="form-error">{{ state.chaptersError }} <button @click="reload">重试</button></p>
       <template v-else>
-        <input id="catalog-search" v-model="search" class="catalog-search" type="search" aria-label="搜索章节" placeholder="输入章节名称">
-        <div class="catalog-grid"><button v-for="chapter in chapters" :key="chapter.id" class="chapter-card" :aria-pressed="selectedChapter === chapter.id" @click="selectedChapter = selectedChapter === chapter.id ? '' : chapter.id">{{ chapter.name }}</button></div>
-        <p v-if="!chapters.length" class="field-help">没有找到对应章节。</p>
+        <div class="catalog-grid"><button v-for="chapter in state.chapters" :key="chapter.id" class="chapter-card" :aria-pressed="selectedChapter === chapter.id" @click="selectedChapter = selectedChapter === chapter.id ? '' : chapter.id">{{ chapter.name }}</button></div>
+        <p v-if="!state.chapters.length" class="field-help">暂无课程章节。</p>
       </template>
     </section>
 

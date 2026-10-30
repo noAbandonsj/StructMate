@@ -33,7 +33,8 @@ function jumpTo(id: string) {
   element?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   element?.focus({ preventScroll: true })
 }
-function time(value: string) { return new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }
+const historyStatus = { ready: '待作答', completed: '已完成', generating: '生成中', failed: '生成失败' }
+function time(value: string) { return new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) }
 watch(() => route.query.requirements, value => { if (typeof value === 'string') state.form.generation_requirements = value.slice(0, 1000) }, { immediate: true })
 watch(() => route.query.chapter, value => { if (typeof value === 'string') state.form.chapter_id = value }, { immediate: true })
 const availableMaterials = computed(() => state.materials.filter(item => !item.chapter_id || item.chapter_id === state.form.chapter_id))
@@ -80,9 +81,21 @@ function retryGeneration() {
             <button class="primary-button" :disabled="!!startReason" :aria-describedby="startReason ? 'practice-start-reason' : undefined">{{ state.busy ? '正在提交…' : state.practice?.status === 'generating' ? '正在生成并复核…' : '开始新练习' }}</button>
           </fieldset>
         </form>
-        <h2 class="history-heading">已有练习</h2><p v-if="state.loading && !state.history.length" class="field-help">正在读取已有练习…</p><p v-else-if="state.readError && !state.history.length" class="field-help">暂时无法读取已有练习，请重试。</p><p v-else-if="!state.history.length" class="field-help">开始一组练习后会保存在这里。</p>
-        <RouterLink v-for="practice in state.history" :key="practice.id" :to="'/practice/' + practice.id" class="conversation-link" :class="{ selected: selected === practice.id }">{{ practice.title || 'AI 练习' }} · {{ practice.actual_count }} 题<span class="field-help">{{ time(practice.created_at) }}</span></RouterLink>
-        <div v-if="state.total > 20" class="document-pagination"><button :disabled="state.page <= 1 || state.loading" @click="state.page--; reload()">上一页</button><span>{{ state.page }}</span><button :disabled="state.page * 20 >= state.total || state.loading" @click="state.page++; reload()">下一页</button></div>
+        <section class="practice-history" aria-labelledby="practice-history-title">
+          <div class="practice-history-heading"><h2 id="practice-history-title">已有练习</h2><span>{{ state.total }} 组</span></div>
+          <p v-if="state.loading && !state.history.length" class="field-help">正在读取已有练习…</p><p v-else-if="state.readError && !state.history.length" class="field-help">暂时无法读取已有练习，请重试。</p><p v-else-if="!state.history.length" class="field-help">暂无练习记录。</p>
+          <ul v-else class="practice-history-list">
+            <li v-for="practice in state.history" :key="practice.id">
+              <RouterLink :to="'/practice/' + practice.id" class="practice-history-card" :class="{ selected: selected === practice.id }" :aria-current="selected === practice.id ? 'page' : undefined">
+                <span class="practice-history-top"><span class="practice-history-kind">{{ practice.mode === 'review' ? '错题复习' : 'AI 练习' }}</span><span class="practice-history-status" :class="'history-status-' + practice.status">{{ historyStatus[practice.status] }}</span></span>
+                <strong class="practice-history-title">{{ practice.title || practice.chapter_name || (practice.mode === 'review' ? '错题复习' : 'AI 练习') }}</strong>
+                <span class="practice-history-meta"><span>{{ practice.actual_count || practice.settings.count || 0 }} 题</span><span v-if="practice.actual_count && ['ready', 'completed'].includes(practice.status)">{{ practice.submitted_count }}/{{ practice.effective_count }} 已答</span></span>
+                <time class="practice-history-date" :datetime="practice.created_at">{{ time(practice.created_at) }}</time>
+              </RouterLink>
+            </li>
+          </ul>
+          <div v-if="state.total > 20" class="document-pagination"><button :disabled="state.page <= 1 || state.loading" @click="state.page--; reload()">上一页</button><span>{{ state.page }}</span><button :disabled="state.page * 20 >= state.total || state.loading" @click="state.page++; reload()">下一页</button></div>
+        </section>
       </aside>
       <div class="practice-main">
         <p v-if="!state.practice" class="notice">{{ state.loading ? '正在读取练习…' : state.readError ? '练习读取失败，请重试。' : selected ? '暂未取得这组练习，请刷新重试。' : '选择章节，开始一组练习。' }}</p>
@@ -109,3 +122,25 @@ function retryGeneration() {
     </div>
   </section>
 </template>
+
+<style scoped>
+.practice-history { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
+.practice-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.practice-history-heading h2 { margin: 0; font-size: 16px; }
+.practice-history-heading > span { color: var(--muted); font-size: 11px; }
+.practice-history-list { display: grid; gap: 10px; max-height: 480px; margin: 0 -3px; padding: 3px; list-style: none; overflow-y: auto; scrollbar-width: thin; }
+.practice-history-card { position: relative; display: grid; gap: 9px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: #fcfcf9; transition: border-color .16s, background-color .16s; }
+.practice-history-card:hover { border-color: #91b2a4; background: #f3f7f2; }
+.practice-history-card.selected { border-color: #91b2a4; background: #edf4ee; box-shadow: inset 3px 0 0 var(--accent); }
+.practice-history-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.practice-history-kind { font-size: 10px; color: var(--muted); }
+.practice-history-status { padding: 2px 7px; border-radius: 5px; font-size: 10px; line-height: 1.6; white-space: nowrap; }
+.history-status-ready { background: #e6efe8; color: var(--accent); }
+.history-status-completed { background: #edf0e9; color: #647668; }
+.history-status-generating { background: #faf2df; color: #8e6c2d; }
+.history-status-failed { background: #faeee8; color: #974b3d; }
+.practice-history-title { font-size: 13px; line-height: 1.6; font-weight: 600; overflow-wrap: anywhere; }
+.practice-history-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.practice-history-date { padding-top: 8px; border-top: 1px solid var(--line); color: #85918a; font-size: 10px; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .practice-history-card { transition: none; } }
+</style>
